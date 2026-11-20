@@ -1,0 +1,13 @@
+# Integration tests: PostgreSQL 16 via Testcontainers (see PostgresContainerConfig).
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed
+
+cinebook:
+  jwt:
+    # Test-only key, NOT used anywhere else.
+    secret: dGVzdC1vbmx5LWp3dC1zZWNyZXQta2V5LWZvci1jaW5lYm9vay10ZXN0cy0xMjM0NTY=
+  qr:
+    hmac-key: dGVzdC1vbmx5LXFyLWhtYWMta2V5LWZvci1jaW5lYm9vay10ZXN0cw==
+  booking:
+    expiry-job-interval: PT1H

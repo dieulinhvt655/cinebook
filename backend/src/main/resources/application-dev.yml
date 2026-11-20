@@ -1,0 +1,6 @@
+# Local development: Flyway runs as the schema owner, then loads demo seed data.
+spring:
+  flyway:
+    user: ${DB_MIGRATOR_USERNAME:cinebook_migrator}
+    password: ${DB_MIGRATOR_PASSWORD:cinebook_migrator}
+    locations: classpath:db/migration,classpath:db/seed

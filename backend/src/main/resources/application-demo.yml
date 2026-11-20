@@ -1,0 +1,6 @@
+# Public demo (Render + Neon/Supabase): production settings plus demo seed data.
+spring:
+  flyway:
+    user: ${DB_MIGRATOR_USERNAME}
+    password: ${DB_MIGRATOR_PASSWORD}
+    locations: classpath:db/migration,classpath:db/seed
