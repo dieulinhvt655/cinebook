@@ -1,11 +1,9 @@
 name: mobile
 
+# Reusable: called from ci.yml, which decides when it runs and gates merges via the ci-ok job.
 on:
-  push:
-    branches: [main]
-    paths: ['mobile/**', '.github/workflows/mobile.yml']
-  pull_request:
-    paths: ['mobile/**', '.github/workflows/mobile.yml']
+  workflow_call:
+  workflow_dispatch:
 
 jobs:
   build:
