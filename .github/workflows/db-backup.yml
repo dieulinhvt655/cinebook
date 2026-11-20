@@ -1,0 +1,31 @@
+name: db-backup
+
+# Daily pg_dump of the demo database (design doc 3.7). Requires the DATABASE_URL secret
+# (postgresql://user:pass@host/db?sslmode=require). Artifacts are kept for 7 days.
+on:
+  schedule:
+    - cron: '0 19 * * *' # 02:00 Vietnam time
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    if: ${{ vars.ENABLE_DB_BACKUP == 'true' }}
+    steps:
+      - name: Install pg_dump 16
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-16
+
+      - name: Dump
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: /usr/lib/postgresql/16/bin/pg_dump -Fc --no-owner "$DATABASE_URL" -f cinebook-$(date -u +%Y%m%d).dump
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cinebook-db-${{ github.run_id }}
+          path: '*.dump'
+          retention-days: 7

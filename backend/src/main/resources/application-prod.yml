@@ -1,0 +1,7 @@
+spring:
+  flyway:
+    user: ${DB_MIGRATOR_USERNAME}
+    password: ${DB_MIGRATOR_PASSWORD}
+springdoc:
+  swagger-ui:
+    enabled: true
