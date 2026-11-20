@@ -1,0 +1,23 @@
+# Normalise line endings: LF in the repo and on checkout, except Windows scripts.
+* text=auto eol=lf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+gradlew text eol=lf
+*.sh    text eol=lf
+
+# Binary assets: never diff or convert.
+*.ttf   binary
+*.otf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.pdf   binary
+*.jar   binary
+*.jks   binary
+
+# Generated code: collapse in GitHub diffs and exclude from language stats.
+mobile/pubspec.lock        linguist-generated
+mobile/**/*.g.dart         linguist-generated
+mobile/**/*.freezed.dart   linguist-generated
