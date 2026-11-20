@@ -19,6 +19,9 @@ repositories {
 
 val jjwtVersion = "0.12.6"
 
+// 1.21.4+ talks Docker API >= 1.44, required by Docker Engine 29 on GitHub runners (1.21.3 from the Boot BOM is skipped there).
+extra["testcontainers.version"] = "1.21.4"
+
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-security")
