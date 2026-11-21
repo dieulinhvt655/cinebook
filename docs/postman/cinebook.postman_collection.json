@@ -49,7 +49,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"new@cinebook.dev\",\n  \"password\": \"Passw0rd!\",\n  \"fullName\": \"Người dùng mới\",\n  \"phone\": \"0900000099\",\n  \"dateOfBirth\": \"2000-01-01\"\n}"
+              "raw": "{\n  \"email\": \"new@cinebook.dev\",\n  \"password\": \"ngựa vằn ăn cỏ ven sông\",\n  \"fullName\": \"Người dùng mới\",\n  \"phone\": \"0900000099\",\n  \"dateOfBirth\": \"2000-01-01\"\n}"
             },
             "auth": {
               "type": "noauth"
@@ -135,6 +135,28 @@
               "mode": "raw",
               "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
             }
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "me"
+              ]
+            },
+            "description": "Hồ sơ người dùng đang đăng nhập."
           }
         }
       ]
