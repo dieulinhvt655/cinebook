@@ -6,6 +6,15 @@ updates:
     schedule: { interval: weekly, day: monday, time: "08:00", timezone: Asia/Ho_Chi_Minh }
     open-pull-requests-limit: 5
     commit-message: { prefix: "chore(deps)" }
+    # The design targets Spring Boot 3; moving to Boot 4 (and springdoc 3, which needs it) is a
+    # planned migration of its own, not an automatic bump.
+    ignore:
+      - dependency-name: "org.springframework.boot"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "io.spring.dependency-management"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.springdoc:*"
+        update-types: ["version-update:semver-major"]
     groups:
       backend-minor-patch:
         update-types: [minor, patch]
