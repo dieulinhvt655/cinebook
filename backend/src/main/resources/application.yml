@@ -34,6 +34,13 @@ cinebook:
     secret: ${JWT_SECRET:}
     access-ttl: ${JWT_ACCESS_TTL:PT15M}
     refresh-ttl: ${JWT_REFRESH_TTL:P30D}
+  auth:
+    # BR-03 sample values: 5 consecutive failures, then wait 15 min, 30 min, 60 min (cap).
+    max-failed-logins: 5
+    lock-durations: PT15M,PT30M,PT1H
+    # Rows untouched for this long are deleted, which also resets the backoff.
+    attempt-retention: P1D
+    cleanup-cron: "0 30 3 * * *"
   qr:
     hmac-key: ${QR_HMAC_KEY:}
   booking:
