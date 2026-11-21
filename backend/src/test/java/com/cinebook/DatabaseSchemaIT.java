@@ -48,9 +48,13 @@ class DatabaseSchemaIT {
                  WHERE st.id = %d""".formatted(showtimeId));
 
         long first = hold(showtimeId, seatId, "CBTEST01", "now() + interval '10 minutes'");
+        // A failed statement aborts the whole PostgreSQL transaction (the test runs in one), so the expected
+        // violation is wrapped in a savepoint and rolled back to it before the test continues.
+        jdbc.execute("SAVEPOINT before_double_hold");
         assertThatThrownBy(() -> hold(showtimeId, seatId, "CBTEST02", "now() + interval '10 minutes'"))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("uq_booking_seats_active");
+        jdbc.execute("ROLLBACK TO SAVEPOINT before_double_hold");
 
         jdbc.update("UPDATE bookings SET expires_at = now() - interval '1 second' WHERE id = ?", first);
         assertThat(holdExpiryService.expireOverdueHolds()).isEqualTo(1);
