@@ -1,6 +1,6 @@
 plugins {
     java
-    id("org.springframework.boot") version "3.5.6"
+    id("org.springframework.boot") version "3.5.16"
     id("io.spring.dependency-management") version "1.1.7"
 }
 
@@ -40,7 +40,7 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:$jjwtVersion")
 
     // API docs (Swagger UI doubles as the MVP admin console)
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.10.0")
 
     // Media storage
     implementation("com.cloudinary:cloudinary-http5:2.6.0")
