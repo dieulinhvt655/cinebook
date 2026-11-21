@@ -12,20 +12,20 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       # Integration tests start PostgreSQL 16 with Testcontainers (Docker is preinstalled on the runner),
       # so Flyway migrations, partial unique index and EXCLUDE constraint are checked on every push.
       - run: ./gradlew test bootJar
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-test-report
