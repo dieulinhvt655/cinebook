@@ -40,7 +40,7 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:$jjwtVersion")
 
     // API docs (Swagger UI doubles as the MVP admin console)
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
 
     // Media storage
     implementation("com.cloudinary:cloudinary-http5:2.0.0")
