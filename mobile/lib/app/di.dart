@@ -9,6 +9,13 @@ import '../core/storage/token_storage.dart';
 import '../features/auth/data/auth_api.dart';
 import '../features/auth/data/auth_repository_impl.dart';
 import '../features/auth/domain/auth_repository.dart';
+import '../features/movies/data/movie_repository_impl.dart';
+import '../features/movies/data/movies_api.dart';
+import '../features/movies/domain/movie_repository.dart';
+import '../features/movies/presentation/recent_searches.dart';
+import '../features/showtimes/data/showtime_repository_impl.dart';
+import '../features/showtimes/data/showtimes_api.dart';
+import '../features/showtimes/domain/showtime_repository.dart';
 import 'router.dart';
 
 final GetIt sl = GetIt.instance;
@@ -34,6 +41,18 @@ Future<void> configureDependencies() async {
       () => AuthRepositoryImpl(api: sl(), tokens: sl(), session: sl()),
     );
 
+  // Movies & showtimes
+  sl
+    ..registerLazySingleton<MoviesApi>(() => MoviesApi(sl<ApiClient>().dio))
+    ..registerLazySingleton<MovieRepository>(() => MovieRepositoryImpl(sl()))
+    ..registerLazySingleton<RecentSearches>(RecentSearches.new)
+    ..registerLazySingleton<ShowtimesApi>(
+      () => ShowtimesApi(sl<ApiClient>().dio),
+    )
+    ..registerLazySingleton<ShowtimeRepository>(
+      () => ShowtimeRepositoryImpl(sl()),
+    );
+
   // Other features register their data sources / repositories here:
-  // movies, showtimes, seat_map, checkout, tickets.
+  // seat_map, checkout, tickets.
 }

@@ -24,3 +24,22 @@ String formatCountdown(Duration d) {
 
 /// The API sends UTC; Vietnam is UTC+7 with no DST.
 DateTime toVietnamTime(DateTime d) => d.toUtc().add(const Duration(hours: 7));
+
+/// Release date etc.: `25/11/2026`.
+String formatDate(DateTime d) => DateFormat('dd/MM/yyyy').format(d);
+
+/// Calendar dates (no time of day) are kept as UTC midnight so the Vietnam-time formatters
+/// above show the same day on any device time zone.
+DateTime parseIsoDate(String s) {
+  final d = DateTime.parse(s);
+  return DateTime.utc(d.year, d.month, d.day);
+}
+
+/// `2026-11-22`, as the API expects for `?date=`.
+String formatIsoDate(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
+
+/// Today's date in Vietnam, as UTC midnight (see [parseIsoDate]).
+DateTime vietnamToday([DateTime? now]) {
+  final v = toVietnamTime(now ?? DateTime.now());
+  return DateTime.utc(v.year, v.month, v.day);
+}
