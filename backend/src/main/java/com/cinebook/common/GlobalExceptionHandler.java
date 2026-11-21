@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
@@ -46,6 +47,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .forEach(f -> fields.putIfAbsent(f.getField(), f.getDefaultMessage()));
         ProblemDetail pd = Problems.of(ErrorCode.VALIDATION_FAILED, "Dữ liệu không hợp lệ");
         pd.setProperty("fields", fields);
+        return ResponseEntity.badRequest().body(pd);
+    }
+
+    /** Bad query/path parameter, e.g. {@code ?status=FOO} or {@code /movies/abc}. */
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers,
+            HttpStatusCode status, WebRequest request) {
+        String name = ex.getPropertyName() == null ? "value" : ex.getPropertyName();
+        ProblemDetail pd = Problems.of(ErrorCode.VALIDATION_FAILED, "Dữ liệu không hợp lệ");
+        pd.setProperty("fields", Map.of(name, "Giá trị không hợp lệ"));
         return ResponseEntity.badRequest().body(pd);
     }
 
