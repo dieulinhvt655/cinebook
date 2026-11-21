@@ -1,11 +1,9 @@
 name: backend
 
+# Reusable: called from ci.yml, which decides when it runs and gates merges via the ci-ok job.
 on:
-  push:
-    branches: [main]
-    paths: ['backend/**', '.github/workflows/backend.yml']
-  pull_request:
-    paths: ['backend/**', '.github/workflows/backend.yml']
+  workflow_call:
+  workflow_dispatch:
 
 jobs:
   test:

@@ -2,8 +2,7 @@
 
 App đặt vé xem phim end-to-end: **Flutter** (BLoC, Clean Architecture) + **Spring Boot 3 / Java 21** + **PostgreSQL 16**. Có giữ ghế 10 phút chống bán trùng ở tầng DB, JWT kèm refresh token xoay vòng, thanh toán giả lập idempotent và vé QR ký HMAC.
 
-[![mobile](../../actions/workflows/mobile.yml/badge.svg)](../../actions/workflows/mobile.yml)
-[![backend](../../actions/workflows/backend.yml/badge.svg)](../../actions/workflows/backend.yml)
+[![ci](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 
 > Thiết kế đầy đủ: [docs/CineBook – Tài liệu phân tích & thiết kế.pdf](docs/). APK, link API demo và GIF demo sẽ bổ sung khi deploy.
 
@@ -35,7 +34,7 @@ flowchart LR
 
 ```
 cinebook/
-├── .github/workflows/   # mobile.yml, backend.yml, db-backup.yml
+├── .github/workflows/   # ci.yml (gọi backend.yml, mobile.yml), db-backup.yml
 ├── docs/                # tài liệu thiết kế, screenshots/, postman/
 ├── mobile/              # Flutter: lib/{app,core,features/<feature>/{data,domain,presentation}}
 │                        # features: auth, movies, showtimes, seat_map, checkout, tickets
@@ -78,3 +77,16 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080/api/v1
 `10.0.2.2` là máy host khi chạy trên Android emulator; trên iOS simulator dùng `http://localhost:8080/api/v1`.
 
 Test: `flutter test` và `flutter test integration_test`.
+
+## Quy ước đóng góp
+
+- **Nhánh:** tạo từ `main`, đặt tên `feat/…`, `fix/…`, `chore/…`, `docs/…`, `refactor/…`, `test/…`. Ví dụ `feat/seat-hold`.
+- **Commit và tiêu đề PR:** theo [Conventional Commits](https://www.conventionalcommits.org/vi/v1.0.0/): `feat(booking): giữ ghế 10 phút`, `fix(auth): xoay vòng refresh token`. Scope là tên module: `auth`, `catalog`, `showtime`, `booking`, `payment`, `ticket`, `mobile`, `ci`, `deps`.
+- **Luồng làm việc:** `main` được bảo vệ, không push thẳng. Mọi thay đổi đi qua PR, check `ci-ok` phải xanh mới merge được. PR merge kiểu squash và nhánh tự xoá sau khi merge.
+- **CI:** `ci.yml` chỉ chạy phần bị ảnh hưởng (`backend.yml` hoặc `mobile.yml`). Job `ci-ok` luôn chạy và là check bắt buộc duy nhất.
+- **Database:** đổi schema bằng migration mới `V<n>__mo_ta.sql`, không sửa migration đã merge.
+- **Phụ thuộc:** Dependabot mở PR cập nhật hằng tuần vào thứ Hai.
+
+## License
+
+[MIT](LICENSE)
