@@ -22,8 +22,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(ApiException.class)
-    ProblemDetail handleApi(ApiException ex) {
-        return Problems.of(ex.code(), ex.getMessage());
+    ResponseEntity<ProblemDetail> handleApi(ApiException ex) {
+        ProblemDetail pd = Problems.of(ex.code(), ex.getMessage());
+        var response = ResponseEntity.status(ex.code().status());
+        ex.retryAfter().ifPresent(after -> {
+            long seconds = Math.max(1, after.toSeconds());
+            pd.setProperty("retryAfterSeconds", seconds);
+            response.header(HttpHeaders.RETRY_AFTER, Long.toString(seconds));
+        });
+        return response.body(pd);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
