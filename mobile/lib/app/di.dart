@@ -6,6 +6,9 @@ import '../core/network/api_client.dart';
 import '../core/network/server_clock.dart';
 import '../core/session/auth_session.dart';
 import '../core/storage/token_storage.dart';
+import '../features/auth/data/auth_api.dart';
+import '../features/auth/data/auth_repository_impl.dart';
+import '../features/auth/domain/auth_repository.dart';
 import 'router.dart';
 
 final GetIt sl = GetIt.instance;
@@ -24,6 +27,13 @@ Future<void> configureDependencies() async {
     )
     ..registerLazySingleton<GoRouter>(() => buildRouter(sl()));
 
-  // Features register their data sources / repositories / blocs here:
-  // auth, movies, showtimes, seat_map, checkout, tickets.
+  // Auth
+  sl
+    ..registerLazySingleton<AuthApi>(() => AuthApi(sl<ApiClient>().dio))
+    ..registerLazySingleton<AuthRepository>(
+      () => AuthRepositoryImpl(api: sl(), tokens: sl(), session: sl()),
+    );
+
+  // Other features register their data sources / repositories here:
+  // movies, showtimes, seat_map, checkout, tickets.
 }

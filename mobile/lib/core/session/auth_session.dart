@@ -14,13 +14,8 @@ class AuthSession extends ChangeNotifier {
 
   AuthStatus get status => _status;
 
-  /// Called by Splash: a stored refresh token means we can resume the session.
-  Future<void> restore() async {
-    final refresh = await _tokens.readRefreshToken();
-    _set(
-      refresh == null ? AuthStatus.unauthenticated : AuthStatus.authenticated,
-    );
-  }
+  /// Splash confirmed the stored tokens with the server (`AuthRepository.restoreSession`).
+  void resume() => _set(AuthStatus.authenticated);
 
   Future<void> signIn({
     required String accessToken,

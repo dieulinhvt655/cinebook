@@ -27,13 +27,19 @@ class ApiClient {
     );
   }
 
+  static const defaultTimeout = Duration(seconds: 30);
+
+  /// Render free tier sleeps; the first request after idle can take 30-60 s to wake it up.
+  static const wakeUpTimeout = Duration(seconds: 60);
+
   final Dio dio;
 
   static BaseOptions _options(String baseUrl) => BaseOptions(
     baseUrl: baseUrl,
-    // Render free tier sleeps; the first request can take 30-60 s to wake it up.
-    connectTimeout: const Duration(seconds: 60),
-    receiveTimeout: const Duration(seconds: 30),
+    // BR-04.7: 30 s. Only the Splash session check waits longer ([wakeUpTimeout]).
+    connectTimeout: defaultTimeout,
+    sendTimeout: defaultTimeout,
+    receiveTimeout: defaultTimeout,
     contentType: Headers.jsonContentType,
   );
 }
