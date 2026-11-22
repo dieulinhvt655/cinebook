@@ -92,10 +92,10 @@ public class SeatMapQueryService {
                     if (status == SeatStatus.AVAILABLE) {
                         available[0]++;
                     }
-                    long pair = rs.getLong("pair_seat_id");
+                    Long pair = rs.getObject("pair_seat_id", Long.class);
                     String row = rs.getString("row_label");
                     byRow.computeIfAbsent(row, r -> new ArrayList<>()).add(new SeatMap.Seat(rs.getLong("id"), row,
-                            rs.getInt("col_number"), code, price, status, rs.wasNull() ? null : pair));
+                            rs.getInt("col_number"), code, price, status, pair));
                 });
 
         List<SeatMap.SeatRow> rows = byRow.entrySet().stream()
