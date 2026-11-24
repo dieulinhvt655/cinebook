@@ -100,6 +100,13 @@ GoRouter buildRouter(AuthSession session) => GoRouter(
             GoRoute(
               path: Routes.tickets,
               builder: (_, _) => const TicketsPage(),
+              routes: [
+                // Nested, so "Xem vé" after paying can open it with the list behind.
+                GoRoute(
+                  path: ':id',
+                  builder: (_, s) => TicketDetailPage(ticketId: _id(s)),
+                ),
+              ],
             ),
           ],
         ),
@@ -146,10 +153,6 @@ GoRouter buildRouter(AuthSession session) => GoRouter(
         bookingId: _id(s),
         success: s.uri.queryParameters['ok'] == '1',
       ),
-    ),
-    GoRoute(
-      path: '/tickets/:id',
-      builder: (_, s) => TicketDetailPage(ticketId: _id(s)),
     ),
   ],
 );
