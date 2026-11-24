@@ -4,6 +4,7 @@ import com.cinebook.booking.dto.PaymentRequest;
 import com.cinebook.booking.dto.PaymentView;
 import com.cinebook.common.ApiException;
 import com.cinebook.common.ErrorCode;
+import com.cinebook.ticket.TicketService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -14,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * F6 mock payment, shaped like a real gateway: each attempt is a {@code payments} row keyed by the
- * client's Idempotency-Key. SUCCESS marks the booking PAID and issues one ticket per seat; FAILED
+ * client's Idempotency-Key. SUCCESS marks the booking PAID and issues one ticket per seat (signed QR, see TicketService); FAILED
  * leaves the hold untouched so the user can retry until it expires.
  *
  * <p>Double taps and network retries send the same key and get the first attempt back, so one key
@@ -29,9 +30,9 @@ public class PaymentService {
     private final JdbcClient jdbc;
     private final BookingLocks locks;
     private final BookingQueryService bookings;
-    private final TicketCodes tickets;
+    private final TicketService tickets;
 
-    public PaymentService(JdbcClient jdbc, BookingLocks locks, BookingQueryService bookings, TicketCodes tickets) {
+    public PaymentService(JdbcClient jdbc, BookingLocks locks, BookingQueryService bookings, TicketService tickets) {
         this.jdbc = jdbc;
         this.locks = locks;
         this.bookings = bookings;
@@ -84,14 +85,14 @@ public class PaymentService {
         for (long seatRow : seats) {
             // Retry the (very unlikely) clash of two random codes.
             for (int attempt = 1; ; attempt++) {
-                String code = tickets.next();
+                String code = TicketCodes.next();
                 int inserted = jdbc.sql("""
                         INSERT INTO tickets (booking_id, booking_seat_id, ticket_code, qr_payload)
                         VALUES (:bookingId, :seatRow, :code, :qr)
                         ON CONFLICT (ticket_code) DO NOTHING
                         """)
                         .param("bookingId", bookingId).param("seatRow", seatRow).param("code", code)
-                        .param("qr", tickets.qrPayload(code)).update();
+                        .param("qr", tickets.qrPayloadFor(code)).update();
                 if (inserted == 1) {
                     break;
                 }

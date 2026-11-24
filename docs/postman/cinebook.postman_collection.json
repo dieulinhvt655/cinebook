@@ -344,6 +344,22 @@
           }
         },
         {
+          "name": "My tickets",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/me/tickets?scope=UPCOMING",
+            "description": "scope UPCOMING (default) | PAST, newest purchase first."
+          }
+        },
+        {
+          "name": "Ticket detail",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tickets/{{bookingId}}",
+            "description": "Paid booking of the caller; others get 404."
+          }
+        },
+        {
           "name": "Update combos",
           "request": {
             "method": "PUT",
