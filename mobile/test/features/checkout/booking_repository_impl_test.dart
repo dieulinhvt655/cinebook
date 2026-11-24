@@ -2,6 +2,7 @@ import 'package:cinebook/core/network/api_failure.dart';
 import 'package:cinebook/core/network/server_clock.dart';
 import 'package:cinebook/features/checkout/data/booking_repository_impl.dart';
 import 'package:cinebook/features/checkout/data/bookings_api.dart';
+import 'package:cinebook/features/checkout/domain/payment.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -64,5 +65,29 @@ void main() {
             ),
       ),
     );
+  });
+
+  test('combos only send quantities above zero', () async {
+    when(
+      () => api.setCombos(7, [
+        {'comboId': 1, 'quantity': 2},
+      ]),
+    ).thenAnswer((_) async => bookingJson(comboTotal: 158000));
+
+    final b = await repo.setCombos(7, {1: 2, 3: 0});
+
+    expect(b.totalAmount, 368000);
+    expect(b.show.movieTitle, 'Phim Thử');
+  });
+
+  test('pay sends the result and the idempotency key', () async {
+    when(
+      () => api.pay(7, 'SUCCESS', 'k1'),
+    ).thenAnswer((_) async => paymentJson());
+
+    final p = await repo.pay(7, PaymentResult.success, idempotencyKey: 'k1');
+
+    expect(p.succeeded, isTrue);
+    expect(p.booking.status, 'PAID');
   });
 }

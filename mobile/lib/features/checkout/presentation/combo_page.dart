@@ -8,16 +8,19 @@ import '../../../app/di.dart';
 import '../../../app/router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../core/network/api_failure.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/countdown_banner.dart';
 import '../../../core/widgets/state_views.dart';
 import '../domain/booking.dart';
+import '../domain/combo.dart';
+import 'cubit/combos_cubit.dart';
 import 'cubit/hold_cubit.dart';
 import 'cubit/hold_timer_cubit.dart';
+import 'hold_expiry.dart';
 
-/// S09: the held seats with the 10-minute countdown. Combos arrive with F6; for now the
-/// screen confirms the hold and leads on to checkout.
+/// S09: countdown, combo list with +/− steppers, "Bỏ qua" / "Tiếp tục" to S10.
 ///
 /// Back asks "Huỷ giữ ghế?" and releases the seats; when time runs out a dialog that
 /// cannot be dismissed sends the user back to the seat map (S08).
@@ -31,6 +34,7 @@ class ComboPage extends StatelessWidget {
     providers: [
       BlocProvider(create: (_) => HoldCubit(sl(), bookingId)..load()),
       BlocProvider(create: (_) => HoldTimerCubit(sl())),
+      BlocProvider(create: (_) => CombosCubit(sl())..load()),
     ],
     child: const ComboView(),
   );
@@ -46,8 +50,13 @@ class ComboView extends StatefulWidget {
 class _ComboViewState extends State<ComboView> {
   /// Set once the user leaves (cancelled or expired), so the page pops only once.
   bool _leaving = false;
+  bool _started = false;
 
   void _onLoaded(Booking booking) {
+    if (!_started) {
+      _started = true;
+      context.read<CombosCubit>().startFrom(booking);
+    }
     final timer = context.read<HoldTimerCubit>()..start(booking.expiresAt);
     if (!booking.isHolding || timer.state.isExpired) unawaited(_expired());
   }
@@ -93,30 +102,34 @@ class _ComboViewState extends State<ComboView> {
   Future<void> _expired() async {
     if (_leaving) return;
     _leaving = true;
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          title: const Text('Hết thời gian giữ ghế'),
-          content: const Text(
-            'Ghế đã được nhả cho người khác. Vui lòng chọn lại ghế.',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Chọn lại ghế'),
-            ),
-          ],
-        ),
-      ),
-    );
+    await showHoldExpiredDialog(context);
+    if (mounted) popThisScreen(context);
+  }
+
+  /// "Bỏ qua" / "Tiếp tục": saves the combos, then S10. S10 reports an expired hold
+  /// back here, and this screen closes too.
+  Future<void> _next(Booking booking) async {
+    final combos = context.read<CombosCubit>();
+    final hold = context.read<HoldCubit>();
+    try {
+      await combos.save(booking);
+    } on ApiFailure catch (f) {
+      if (!mounted) return;
+      if (f.code == 'HOLD_EXPIRED') return _expired();
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(f.message)));
+      return;
+    }
     if (!mounted) return;
-    // The hold can run out while S10 is open on top: close everything down to S08.
-    final self = ModalRoute.of(context);
-    Navigator.of(context).popUntil((r) => r == self);
-    context.pop();
+    final exit = await context.push<HoldExit>(Routes.checkout(booking.id));
+    if (!mounted) return;
+    if (exit == HoldExit.expired) {
+      _leaving = true;
+      context.pop();
+    } else {
+      await hold.load(); // totals as the server has them now
+    }
   }
 
   @override
@@ -128,7 +141,11 @@ class _ComboViewState extends State<ComboView> {
           listener: (_, state) => _onLoaded(state.booking!),
         ),
         BlocListener<HoldTimerCubit, HoldTimerState>(
-          listenWhen: (a, b) => !a.isExpired && b.isExpired,
+          // While S10 is on top, S10 handles the expiry and reports back.
+          listenWhen: (a, b) =>
+              !a.isExpired &&
+              b.isExpired &&
+              (ModalRoute.of(context)?.isCurrent ?? true),
           listener: (_, _) => unawaited(_expired()),
         ),
       ],
@@ -152,7 +169,7 @@ class _ComboViewState extends State<ComboView> {
               },
               bottomNavigationBar: booking == null
                   ? null
-                  : _Bar(booking: booking, cancelling: state.cancelling),
+                  : _Bar(booking: booking, onNext: () => _next(booking)),
             );
           },
         ),
@@ -174,35 +191,54 @@ class _Body extends StatelessWidget {
         BlocBuilder<HoldTimerCubit, HoldTimerState>(
           builder: (_, timer) => CountdownBanner(remaining: timer.remaining),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.pagePadding,
+            AppSpacing.sm,
+            AppSpacing.pagePadding,
+            0,
+          ),
+          child: Text(
+            'Ghế: ${booking.seats.map((s) => s.label).join(', ')}',
+            style: text.bodyMedium?.copyWith(color: AppColors.textSecondary),
+          ),
+        ),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(AppSpacing.pagePadding),
-            children: [
-              Text('Ghế đang giữ', style: text.titleMedium),
-              const SizedBox(height: AppSpacing.xs),
-              for (final s in booking.seats)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
-                  child: Row(
-                    children: [
-                      Expanded(child: Text('Ghế ${s.label}')),
-                      Text(formatVnd(s.price)),
-                    ],
-                  ),
+          child: BlocBuilder<CombosCubit, CombosState>(
+            builder: (context, state) {
+              final cubit = context.read<CombosCubit>();
+              final combos = state.combos;
+              if (combos == null) {
+                if (state.failure case final f?) {
+                  // Never blocks checkout: "Bỏ qua" below still works.
+                  return EmptyView(
+                    icon: Icons.fastfood_outlined,
+                    message: 'Không tải được combo. ${f.message}',
+                    actionLabel: 'Thử lại',
+                    onAction: cubit.load,
+                  );
+                }
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (combos.isEmpty) {
+                return const EmptyView(
+                  icon: Icons.fastfood_outlined,
+                  message: 'Hiện chưa có combo',
+                );
+              }
+              return ListView.separated(
+                padding: const EdgeInsets.all(AppSpacing.pagePadding),
+                itemCount: combos.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(height: AppSpacing.sm),
+                itemBuilder: (_, i) => ComboTile(
+                  combo: combos[i],
+                  quantity: state.quantityOf(combos[i].id),
+                  onAdd: () => cubit.add(combos[i]),
+                  onRemove: () => cubit.remove(combos[i]),
                 ),
-              const Divider(height: AppSpacing.lg),
-              Text(
-                'Mã đơn: ${booking.bookingCode}',
-                style: text.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              const EmptyView(
-                icon: Icons.fastfood_outlined,
-                message: 'Combo bắp nước sẽ sớm có mặt',
-              ),
-            ],
+              );
+            },
           ),
         ),
       ],
@@ -210,43 +246,122 @@ class _Body extends StatelessWidget {
   }
 }
 
-class _Bar extends StatelessWidget {
-  const _Bar({required this.booking, required this.cancelling});
+/// Name, description, price and a +/− stepper.
+class ComboTile extends StatelessWidget {
+  const ComboTile({
+    super.key,
+    required this.combo,
+    required this.quantity,
+    required this.onAdd,
+    required this.onRemove,
+  });
 
-  final Booking booking;
-  final bool cancelling;
+  final Combo combo;
+  final int quantity;
+  final VoidCallback onAdd;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     return Material(
       color: AppColors.surface,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  formatVnd(booking.totalAmount),
-                  style: text.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+      borderRadius: BorderRadius.circular(AppSpacing.radius),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Row(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(AppSpacing.radius),
+              ),
+              child: const Icon(Icons.fastfood_outlined),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(combo.name, style: text.titleSmall),
+                  if (combo.description case final d?)
+                    Text(
+                      d,
+                      style: text.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  Text(formatVnd(combo.price), style: text.bodyMedium),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Bớt ${combo.name}',
+              onPressed: quantity > 0 ? onRemove : null,
+              icon: const Icon(Icons.remove_circle_outline),
+            ),
+            SizedBox(
+              width: 24,
+              child: Text(
+                '$quantity',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Thêm ${combo.name}',
+              onPressed: quantity < Combo.maxQuantity ? onAdd : null,
+              icon: const Icon(Icons.add_circle_outline),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Bar extends StatelessWidget {
+  const _Bar({required this.booking, required this.onNext});
+
+  final Booking booking;
+  final Future<void> Function() onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return BlocBuilder<CombosCubit, CombosState>(
+      builder: (context, combos) => Material(
+        color: AppColors.surface,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    formatVnd(booking.seatTotal + combos.total),
+                    style: text.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(
-                width: 140,
-                height: AppSpacing.buttonHeight,
-                child: PrimaryButton(
-                  label: 'Tiếp tục',
-                  loading: cancelling,
-                  onPressed: () =>
-                      unawaited(context.push(Routes.checkout(booking.id))),
+                SizedBox(
+                  width: 140,
+                  height: AppSpacing.buttonHeight,
+                  child: PrimaryButton(
+                    label: combos.hasSelection ? 'Tiếp tục' : 'Bỏ qua',
+                    loading: combos.saving,
+                    onPressed: () => unawaited(onNext()),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
