@@ -151,9 +151,9 @@ class TicketIT {
         long paidId = paid(alice, now.plusHours(3), 0, 1);
         long cancelled = hold(alice, now.plusHours(6), 0, 1);
         holds.cancel(alice, cancelled);
-        long lapsed = hold(alice, now.plusHours(9), 2);
+        long lapsed = hold(alice, now.plusHours(9), 2, 3);
         jdbc.update("UPDATE bookings SET expires_at = now() - interval '1 minute' WHERE id = ?", lapsed);
-        long holding = hold(alice, now.plusHours(12), 3);
+        long holding = hold(alice, now.plusHours(12), 0, 1);
 
         JsonNode history = body(ok(get("/me/bookings"), alice));
         assertThat(ids(history)).containsExactly(holding, lapsed, cancelled, paidId);
