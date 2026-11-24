@@ -95,4 +95,25 @@ void main() {
     expect(find.text('Rạp 3'), findsOneWidget);
     verify(() => repo.forMovie(7, next)).called(1);
   });
+
+  testWidgets('time chips show the free seats, or "Hết vé"', (t) async {
+    when(() => repo.forMovie(7, today)).thenAnswer(
+      (_) async => MovieShowtimes(
+        movieId: 7,
+        date: today,
+        cinemas: [
+          cinema(1, 'Hà Nội', [
+            slot(10, hourUtc: 2, availableSeats: 116),
+            slot(11, hourUtc: 5, availableSeats: 0),
+            slot(12, hourUtc: 8),
+          ]),
+        ],
+      ),
+    );
+    await pump(t);
+
+    expect(find.text('116 ghế trống'), findsOneWidget);
+    expect(find.text('Hết vé'), findsOneWidget);
+    expect(find.text('Phòng 1'), findsOneWidget); // count unknown: room name
+  });
 }

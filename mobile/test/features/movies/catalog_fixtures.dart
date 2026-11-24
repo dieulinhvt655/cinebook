@@ -21,17 +21,22 @@ MovieSummary movie(int id, {String title = 'Phim'}) => MovieSummary(
   releaseDate: DateTime.utc(2026, 11, 1),
 );
 
-ShowtimeSlot slot(int id, {int hourUtc = 5, bool bookable = true}) =>
-    ShowtimeSlot(
-      id: id,
-      startAt: DateTime.utc(2026, 11, 22, hourUtc),
-      endAt: DateTime.utc(2026, 11, 22, hourUtc + 2),
-      format: '2D',
-      subtitle: 'SUB',
-      auditorium: 'Phòng 1',
-      basePrice: 90000,
-      bookable: bookable,
-    );
+ShowtimeSlot slot(
+  int id, {
+  int hourUtc = 5,
+  bool bookable = true,
+  int? availableSeats,
+}) => ShowtimeSlot(
+  id: id,
+  startAt: DateTime.utc(2026, 11, 22, hourUtc),
+  endAt: DateTime.utc(2026, 11, 22, hourUtc + 2),
+  format: '2D',
+  subtitle: 'SUB',
+  auditorium: 'Phòng 1',
+  basePrice: 90000,
+  bookable: bookable,
+  availableSeats: availableSeats,
+);
 
 CinemaShowtimes cinema(int id, String city, List<ShowtimeSlot> slots) =>
     CinemaShowtimes(
