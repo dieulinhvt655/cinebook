@@ -24,10 +24,11 @@ public class MovieController {
 
     @GetMapping
     @Operation(summary = "Tab Đang chiếu / Sắp chiếu (S04) và tìm kiếm theo tên (S05), không phân biệt dấu và hoa thường. "
-            + "Không có q thì status mặc định NOW_SHOWING; có q thì tìm mọi phim, lọc thêm theo status nếu truyền")
+            + "Không có q thì status mặc định NOW_SHOWING; có q thì tìm mọi phim, lọc thêm theo status nếu truyền. "
+            + "city: Đang chiếu chỉ tính suất ở rạp của thành phố đó")
     public List<MovieSummary> list(@RequestParam(required = false) MovieStatus status,
-            @RequestParam(required = false) String q) {
-        return movies.list(status, q);
+            @RequestParam(required = false) String q, @RequestParam(required = false) String city) {
+        return movies.list(status, q, city);
     }
 
     @GetMapping("/{id}")
