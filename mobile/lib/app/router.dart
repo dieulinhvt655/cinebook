@@ -37,7 +37,8 @@ abstract final class Routes {
   static String combos(int bookingId) => '/bookings/$bookingId/combos'; // S09
   static String checkout(int bookingId) =>
       '/bookings/$bookingId/checkout'; // S10
-  static String result(int bookingId) => '/bookings/$bookingId/result'; // S11
+  static String result(int bookingId, {required bool success}) =>
+      '/bookings/$bookingId/result?ok=${success ? 1 : 0}'; // S11
   static String ticket(int id) => '/tickets/$id'; // S13
   static String cinema(int id) =>
       '/cinemas/$id'; // Rạp tab: one cinema's schedule
@@ -141,7 +142,10 @@ GoRouter buildRouter(AuthSession session) => GoRouter(
     ),
     GoRoute(
       path: '/bookings/:id/result',
-      builder: (_, s) => PaymentResultPage(bookingId: _id(s)),
+      builder: (_, s) => PaymentResultPage(
+        bookingId: _id(s),
+        success: s.uri.queryParameters['ok'] == '1',
+      ),
     ),
     GoRoute(
       path: '/tickets/:id',
