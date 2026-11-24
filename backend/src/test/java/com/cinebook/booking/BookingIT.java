@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -70,6 +71,9 @@ class BookingIT {
 
     @Autowired
     HoldExpiryService expiry;
+
+    @Autowired
+    TicketCodes ticketCodes;
 
     String tag;
     long alice;
@@ -274,6 +278,130 @@ class BookingIT {
         expectError(holdIds(alice, 999_999_999L, List.of(seat.get("A1"))), 404, "NOT_FOUND");
     }
 
+    // ---- F6: combos and mock payment ----
+
+    @Test
+    void combosAreListedAndReplaceTheBookingsCombosWithFixedPrices() throws Exception {
+        long combo = combo(50000);
+        long id = bookingId(hold(alice, "A1", "A2"));
+        int seats = 2 * (BASE_PRICE + surcharge("STANDARD"));
+
+        JsonNode list = body(mvc.perform(get("/combos").header("Authorization", bearer(alice))));
+        assertThat(list.findValuesAsText("name")).contains("Combo " + tag);
+
+        JsonNode b = body(putCombos(alice, id, Map.of(combo, 2)).andExpect(status().isOk()));
+        assertThat(b.get("comboTotal").asInt()).isEqualTo(100000);
+        assertThat(b.get("totalAmount").asInt()).isEqualTo(seats + 100000);
+        assertThat(b.get("combos").get(0).get("quantity").asInt()).isEqualTo(2);
+        assertThat(b.get("show").get("movieTitle").asText()).isEqualTo("Giữ Ghế " + tag);
+
+        // The price is fixed for this booking even if the combo price changes later.
+        jdbc.update("UPDATE combos SET price = 99000 WHERE id = ?", combo);
+        b = body(mvc.perform(get("/bookings/{id}", id).header("Authorization", bearer(alice))));
+        assertThat(b.get("combos").get(0).get("unitPrice").asInt()).isEqualTo(50000);
+
+        b = body(putCombos(alice, id, Map.of()).andExpect(status().isOk()));
+        assertThat(b.get("combos")).isEmpty();
+        assertThat(b.get("totalAmount").asInt()).isEqualTo(seats);
+    }
+
+    @Test
+    void combosNeedTheOwnersLiveHold() throws Exception {
+        long combo = combo(50000);
+        long id = bookingId(hold(alice, "A1", "A2"));
+
+        expectError(putCombos(bob, id, Map.of(combo, 1)), 404, "NOT_FOUND");
+        expectError(putCombos(alice, id, Map.of(combo, 11)), 400, "VALIDATION_FAILED");
+        jdbc.update("UPDATE combos SET is_active = false WHERE id = ?", combo);
+        expectError(putCombos(alice, id, Map.of(combo, 1)), 400, "VALIDATION_FAILED");
+
+        jdbc.update("UPDATE combos SET is_active = true WHERE id = ?", combo);
+        jdbc.update("UPDATE bookings SET expires_at = ? WHERE id = ?", now.minusSeconds(1), id);
+        expectError(putCombos(alice, id, Map.of(combo, 1)), 410, "HOLD_EXPIRED");
+    }
+
+    @Test
+    void failedPaymentKeepsTheHoldAndARetryWithANewKeyPaysAndIssuesTickets() throws Exception {
+        long combo = combo(50000);
+        long id = bookingId(hold(alice, "A1", "A2"));
+        putCombos(alice, id, Map.of(combo, 1)).andExpect(status().isOk());
+
+        JsonNode failed = body(pay(alice, id, "k-fail-" + tag, "FAILED").andExpect(status().isCreated()));
+        assertThat(failed.get("status").asText()).isEqualTo("FAILED");
+        assertThat(failed.get("booking").get("status").asText()).isEqualTo("HOLDING");
+        assertThat(ticketCount(id)).isZero();
+
+        JsonNode ok = body(pay(alice, id, "k-ok-" + tag, "SUCCESS").andExpect(status().isCreated()));
+        assertThat(ok.get("status").asText()).isEqualTo("SUCCESS");
+        assertThat(ok.get("amount").asInt()).isEqualTo(2 * (BASE_PRICE + surcharge("STANDARD")) + 50000);
+        assertThat(ok.get("booking").get("status").asText()).isEqualTo("PAID");
+        assertThat(ok.get("booking").get("paidAt").isNull()).isFalse();
+
+        assertThat(ticketCount(id)).isEqualTo(2);
+        jdbc.queryForList("SELECT ticket_code, qr_payload FROM tickets WHERE booking_id = ?", id).forEach(t -> {
+            assertThat((String) t.get("ticket_code")).matches("TK[A-Z2-9]{10}");
+            String qr = (String) t.get("qr_payload");
+            assertThat(qr).startsWith("CINEBOOK:" + t.get("ticket_code") + ".").doesNotContain(Long.toString(id));
+            assertThat(ticketCodes.verify(qr)).isTrue();
+            assertThat(ticketCodes.verify(qr.substring(0, qr.length() - 1) + "x")).isFalse();
+        });
+
+        JsonNode map = body(mvc.perform(get("/showtimes/{id}/seats", showtime).header("Authorization", bearer(bob))));
+        assertThat(map.findValues("status").stream().filter(n -> "SOLD".equals(n.asText())).count()).isEqualTo(2);
+
+        // Paid: no second payment, no cancel, and the expiry job leaves it alone.
+        expectError(pay(alice, id, "k-again-" + tag, "SUCCESS"), 409, "BOOKING_NOT_HOLDING");
+        jdbc.update("UPDATE bookings SET expires_at = ? WHERE id = ?", now.minusSeconds(1), id);
+        expiry.expireOverdueHolds();
+        assertThat(jdbc.queryForObject("SELECT status FROM bookings WHERE id = ?", String.class, id))
+                .isEqualTo("PAID");
+    }
+
+    @Test
+    void theSameIdempotencyKeyNeverPaysTwiceEvenAtOnce() throws Exception {
+        long id = bookingId(hold(alice, "A1", "A2"));
+        String key = "k-double-" + tag;
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Callable<String> tap = () -> {
+                start.await();
+                return pay(alice, id, key, "SUCCESS").andReturn().getResponse().getContentAsString();
+            };
+            Future<String> a = pool.submit(tap);
+            Future<String> b = pool.submit(tap);
+            start.countDown();
+            long first = json.readTree(a.get()).get("id").asLong();
+            long second = json.readTree(b.get()).get("id").asLong();
+            assertThat(first).isEqualTo(second);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM payments WHERE booking_id = ?", Integer.class, id))
+                .isEqualTo(1);
+        assertThat(ticketCount(id)).isEqualTo(2);
+
+        // A later retry with the same key (e.g. after a timeout) still gets the same answer.
+        pay(alice, id, key, "SUCCESS").andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("SUCCESS"));
+    }
+
+    @Test
+    void paymentNeedsAKeyTheOwnerAndALiveHold() throws Exception {
+        long id = bookingId(hold(alice, "A1", "A2"));
+
+        expectError(mvc.perform(post("/bookings/{id}/payments", id).header("Authorization", bearer(alice))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"result\":\"SUCCESS\"}")),
+                400, "IDEMPOTENCY_KEY_REQUIRED");
+        expectError(pay(bob, id, "k-bob-" + tag, "SUCCESS"), 404, "NOT_FOUND");
+        expectError(pay(alice, id, "k-bad-" + tag, "MAYBE"), 400, "VALIDATION_FAILED");
+
+        jdbc.update("UPDATE bookings SET expires_at = ? WHERE id = ?", now.minusSeconds(1), id);
+        expectError(pay(alice, id, "k-late-" + tag, "SUCCESS"), 410, "HOLD_EXPIRED");
+        assertThat(ticketCount(id)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM payments WHERE booking_id = ?", Integer.class, id))
+                .isZero();
+    }
+
     private String tryHold(long userId, long st) {
         try {
             holds.hold(userId, new HoldRequest(st, List.of(seat.get("A1"), seat.get("A2"))));
@@ -324,6 +452,32 @@ class BookingIT {
 
     private static void expectError(ResultActions result, int status, String code) throws Exception {
         result.andExpect(status().is(status)).andExpect(jsonPath("$.code").value(code));
+    }
+
+    private long combo(int price) {
+        return jdbc.queryForObject("INSERT INTO combos (name, price) VALUES (?, ?) RETURNING id", Long.class,
+                "Combo " + tag, price);
+    }
+
+    private ResultActions putCombos(long userId, long bookingId, Map<Long, Integer> items) throws Exception {
+        List<Map<String, Object>> list = new ArrayList<>();
+        items.forEach((combo, qty) -> list.add(Map.of("comboId", combo, "quantity", qty)));
+        return mvc.perform(put("/bookings/{id}/combos", bookingId).header("Authorization", bearer(userId))
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("items", list))));
+    }
+
+    private ResultActions pay(long userId, long bookingId, String key, String result) throws Exception {
+        return mvc.perform(post("/bookings/{id}/payments", bookingId).header("Authorization", bearer(userId))
+                .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("result", result))));
+    }
+
+    private int ticketCount(long bookingId) {
+        return jdbc.queryForObject("SELECT count(*) FROM tickets WHERE booking_id = ?", Integer.class, bookingId);
+    }
+
+    private JsonNode body(ResultActions result) throws Exception {
+        return json.readTree(result.andReturn().getResponse().getContentAsString());
     }
 
     private String bearer(long userId) {
