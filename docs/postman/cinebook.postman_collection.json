@@ -433,6 +433,14 @@
             "url": "{{baseUrl}}/tickets/1",
             "header": []
           }
+        },
+        {
+          "name": "My bookings (history)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/me/bookings",
+            "description": "S14 transaction history: my 50 newest bookings in every status (HOLDING, PAID, EXPIRED, CANCELLED)."
+          }
         }
       ]
     },
