@@ -1,5 +1,6 @@
 package com.cinebook.showtime;
 
+import com.cinebook.showtime.dto.CinemaSchedule;
 import com.cinebook.showtime.dto.MovieShowtimes;
 import com.cinebook.showtime.dto.SeatMap;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,6 +31,13 @@ public class ShowtimeController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) String city) {
         return showtimes.forMovie(id, date, city);
+    }
+
+    @GetMapping("/cinemas/{id}/showtimes")
+    @Operation(summary = "Lịch chiếu của một rạp trong một ngày (tab Rạp), nhóm theo phim. 404 nếu rạp không có hoặc đã ẩn")
+    public CinemaSchedule forCinema(@PathVariable long id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return showtimes.forCinema(id, date);
     }
 
     @GetMapping("/showtimes/{id}/seats")

@@ -1,8 +1,11 @@
 package com.cinebook.showtime;
 
 import com.cinebook.booking.BookingProperties;
+import com.cinebook.catalog.CinemaQueryService;
 import com.cinebook.catalog.MovieQueryService;
+import com.cinebook.catalog.dto.CinemaInfo;
 import com.cinebook.common.VietnamTime;
+import com.cinebook.showtime.dto.CinemaSchedule;
 import com.cinebook.showtime.dto.CinemaShowtimes;
 import com.cinebook.showtime.dto.MovieShowtimes;
 import com.cinebook.showtime.dto.ShowtimeSlot;
@@ -36,12 +39,15 @@ public class ShowtimeQueryService {
     private final Clock clock;
     private final BookingProperties booking;
     private final MovieQueryService movies;
+    private final CinemaQueryService cinemas;
 
-    public ShowtimeQueryService(JdbcClient jdbc, Clock clock, BookingProperties booking, MovieQueryService movies) {
+    public ShowtimeQueryService(JdbcClient jdbc, Clock clock, BookingProperties booking, MovieQueryService movies,
+            CinemaQueryService cinemas) {
         this.jdbc = jdbc;
         this.clock = clock;
         this.booking = booking;
         this.movies = movies;
+        this.cinemas = cinemas;
     }
 
     /**
@@ -94,6 +100,62 @@ public class ShowtimeQueryService {
         return new MovieShowtimes(movieId, day, cinemas, next);
     }
 
+    /**
+     * "Rạp" tab: what one cinema shows on a Vietnam day, grouped by movie. Same rules as
+     * {@link #forMovie}: started showtimes hidden, closed sales listed with {@code bookable=false}.
+     */
+    public CinemaSchedule forCinema(long cinemaId, LocalDate date) {
+        CinemaInfo cinema = cinemas.require(cinemaId);
+        LocalDate day = date == null ? VietnamTime.today(clock) : date;
+        OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
+        OffsetDateTime dayStart = day.atStartOfDay(VietnamTime.ZONE).toOffsetDateTime();
+        OffsetDateTime dayEnd = day.plusDays(1).atStartOfDay(VietnamTime.ZONE).toOffsetDateTime();
+        Instant salesCloseAfter = now.toInstant().plus(booking.salesCutoff());
+        String from = """
+                  FROM showtimes s
+                  JOIN auditoriums a ON a.id = s.auditorium_id
+                  JOIN movies m ON m.id = s.movie_id
+                  LEFT JOIN media_assets p ON p.id = m.poster_id
+                 WHERE a.cinema_id = :cinemaId AND s.status = 'OPEN' AND m.is_active AND s.start_at > :now
+                """;
+
+        Map<Long, MovieBuilder> byMovie = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT m.id AS movie_id, m.title, p.url AS poster_url, m.age_rating, m.duration_min,
+                       s.id, s.start_at, s.end_at, s.format, s.subtitle, a.name AS auditorium, s.base_price,
+                       """ + SeatAvailability.FREE_COUNT + """
+                        AS available_seats
+                """ + from + """
+                   AND s.start_at >= :dayStart AND s.start_at < :dayEnd
+                 ORDER BY m.title, m.id, s.start_at, a.name
+                """)
+                .param("cinemaId", cinemaId).param("now", now).param("dayStart", dayStart).param("dayEnd", dayEnd)
+                .query(rs -> {
+                    Instant start = rs.getObject("start_at", OffsetDateTime.class).toInstant();
+                    MovieBuilder movie = byMovie.computeIfAbsent(rs.getLong("movie_id"), MovieBuilder::new);
+                    if (movie.title == null) {
+                        movie.title = rs.getString("title");
+                        movie.posterUrl = rs.getString("poster_url");
+                        movie.ageRating = rs.getString("age_rating");
+                        movie.durationMin = rs.getInt("duration_min");
+                    }
+                    movie.slots.add(new ShowtimeSlot(rs.getLong("id"), start,
+                            rs.getObject("end_at", OffsetDateTime.class).toInstant(), rs.getString("format"),
+                            rs.getString("subtitle"), rs.getString("auditorium"), rs.getInt("base_price"),
+                            start.isAfter(salesCloseAfter), rs.getInt("available_seats")));
+                });
+
+        List<CinemaSchedule.MovieSlots> list = byMovie.values().stream().map(MovieBuilder::build).toList();
+        LocalDate next = null;
+        if (list.isEmpty()) {
+            OffsetDateTime first = jdbc.sql("SELECT min(s.start_at) " + from + " AND s.start_at >= :after")
+                    .param("cinemaId", cinemaId).param("now", now).param("after", dayEnd)
+                    .query(OffsetDateTime.class).optional().orElse(null);
+            next = first == null ? null : first.atZoneSameInstant(VietnamTime.ZONE).toLocalDate();
+        }
+        return new CinemaSchedule(cinema, day, list, next);
+    }
+
     private LocalDate nextDateWithShowtimes(long movieId, OffsetDateTime after, OffsetDateTime now, String city,
             String cityClause) {
         var spec = jdbc.sql("SELECT min(s.start_at) " + FROM + cityClause + " AND s.start_at >= :after")
@@ -103,6 +165,23 @@ public class ShowtimeQueryService {
         }
         OffsetDateTime first = spec.query(OffsetDateTime.class).optional().orElse(null);
         return first == null ? null : first.atZoneSameInstant(VietnamTime.ZONE).toLocalDate();
+    }
+
+    private static final class MovieBuilder {
+        private final long id;
+        private String title;
+        private String posterUrl;
+        private String ageRating;
+        private int durationMin;
+        private final List<ShowtimeSlot> slots = new ArrayList<>();
+
+        MovieBuilder(long id) {
+            this.id = id;
+        }
+
+        CinemaSchedule.MovieSlots build() {
+            return new CinemaSchedule.MovieSlots(id, title, posterUrl, ageRating, durationMin, List.copyOf(slots));
+        }
     }
 
     private static final class CinemaBuilder {
