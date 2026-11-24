@@ -53,6 +53,15 @@ public class MovieQueryService {
      * without one, {@code status} defaults to NOW_SHOWING.
      */
     public List<MovieSummary> list(MovieStatus status, String query) {
+        return list(status, query, null);
+    }
+
+    /**
+     * As {@link #list(MovieStatus, String)}; with a {@code city}, "now showing" only counts showtimes
+     * at active cinemas of that city (Home city picker). Coming-soon movies are not tied to a city.
+     */
+    public List<MovieSummary> list(MovieStatus status, String query, String city) {
+        String cityFilter = city == null || city.isBlank() ? null : city.strip();
         String q = query == null ? "" : query.strip();
         if (q.length() > MAX_QUERY_LENGTH) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Từ khoá tìm kiếm tối đa " + MAX_QUERY_LENGTH + " ký tự");
@@ -69,8 +78,12 @@ public class MovieQueryService {
                      AND m.release_date <= :today
                      AND EXISTS (SELECT 1 FROM showtimes s
                                   WHERE s.movie_id = m.id AND s.status = 'OPEN'
-                                    AND s.start_at > :now AND s.start_at < :horizon)
-                    """);
+                                    AND s.start_at > :now AND s.start_at < :horizon
+                    """).append(cityFilter == null ? "" : """
+                                    AND s.auditorium_id IN (SELECT a.id FROM auditoriums a
+                                                              JOIN cinemas c ON c.id = a.cinema_id
+                                                             WHERE c.city = :city AND c.is_active)
+                    """).append(")\n");
         } else if (effective == MovieStatus.COMING_SOON) {
             sql.append(" AND m.release_date > :today ");
         }
@@ -85,6 +98,9 @@ public class MovieQueryService {
         if (effective == MovieStatus.NOW_SHOWING) {
             spec = spec.param("now", OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC))
                     .param("horizon", today.plusDays(SCHEDULE_DAYS).atStartOfDay(VietnamTime.ZONE).toOffsetDateTime());
+            if (cityFilter != null) {
+                spec = spec.param("city", cityFilter);
+            }
         }
         return spec.query((rs, i) -> new MovieSummary(rs.getLong("id"), rs.getString("title"),
                 rs.getString("poster_url"), rs.getString("banner_url"), rs.getString("age_rating"),

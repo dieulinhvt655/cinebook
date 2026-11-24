@@ -26,6 +26,12 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          # Demo images under /media never change in place (a new image gets a new name).
+          max-age: 7d
   jackson:
     time-zone: UTC
 

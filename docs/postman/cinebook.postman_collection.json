@@ -219,6 +219,34 @@
             "url": "{{baseUrl}}/combos",
             "header": []
           }
+        },
+        {
+          "name": "Cities",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/cities"
+          }
+        },
+        {
+          "name": "Cinemas in a city",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/cinemas?city=Hà Nội"
+          }
+        },
+        {
+          "name": "Cinema schedule by date",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/cinemas/1/showtimes?date=2026-11-25"
+          }
+        },
+        {
+          "name": "Now showing in a city",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/movies?status=NOW_SHOWING&city=Hà Nội"
+          }
         }
       ]
     },

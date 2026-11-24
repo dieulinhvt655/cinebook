@@ -2,6 +2,7 @@ package com.cinebook.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -51,6 +52,7 @@ class CatalogIT {
     String token;
     String tag;
     String city;
+    long cinemaId;
     long auditorium;
     OffsetDateTime now;
 
@@ -60,12 +62,12 @@ class CatalogIT {
         tag = UUID.randomUUID().toString().substring(0, 8);
         city = "Thành phố " + tag;
         now = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS);
-        long cinema = jdbc.queryForObject(
+        cinemaId = jdbc.queryForObject(
                 "INSERT INTO cinemas (name, city, address) VALUES (?, ?, '1 Test') RETURNING id", Long.class,
                 "Rạp " + tag, city);
         auditorium = jdbc.queryForObject(
                 "INSERT INTO auditoriums (cinema_id, name, row_count, col_count) VALUES (?, 'P1', 1, 1) RETURNING id",
-                Long.class, cinema);
+                Long.class, cinemaId);
     }
 
     @Test
@@ -200,6 +202,89 @@ class CatalogIT {
         mvc.perform(auth(get("/movies/1/showtimes").param("date", "21-11-2026")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void citiesAndCinemasListOnlyActiveCinemas() throws Exception {
+        jdbc.update("INSERT INTO cinemas (name, city, address, is_active) VALUES (?, ?, 'x', false)",
+                "Rạp Ẩn " + tag, city);
+
+        JsonNode cities = body(perform(get("/cities")));
+        JsonNode mine = null;
+        for (JsonNode c : cities) {
+            if (c.get("name").asText().equals(city)) {
+                mine = c;
+            }
+        }
+        assertThat(mine).isNotNull();
+        assertThat(mine.get("cinemaCount").asInt()).isEqualTo(1);
+
+        JsonNode cinemas = body(perform(get("/cinemas").param("city", city)));
+        assertThat(cinemas).hasSize(1);
+        assertThat(cinemas.get(0).get("id").asLong()).isEqualTo(cinemaId);
+        assertThat(cinemas.get(0).get("address").asText()).isEqualTo("1 Test");
+    }
+
+    @Test
+    void nowShowingCanBeNarrowedToACity() throws Exception {
+        long here = movie("Ở Đây " + tag, LocalDate.of(2026, 1, 1));
+        showtime(here, now.plusHours(3));
+        long elsewhere = movie("Nơi Khác " + tag, LocalDate.of(2026, 1, 1));
+        long otherCinema = jdbc.queryForObject(
+                "INSERT INTO cinemas (name, city, address) VALUES (?, ?, 'x') RETURNING id", Long.class,
+                "Rạp Khác " + tag, "Nơi khác " + tag);
+        long otherRoom = jdbc.queryForObject(
+                "INSERT INTO auditoriums (cinema_id, name, row_count, col_count) VALUES (?, 'P1', 1, 1) RETURNING id",
+                Long.class, otherCinema);
+        jdbc.update("""
+                INSERT INTO showtimes (movie_id, auditorium_id, start_at, end_at, format, subtitle, base_price)
+                VALUES (?, ?, ?, ?, '2D', 'SUB', 80000)
+                """, elsewhere, otherRoom, now.plusHours(3), now.plusHours(4));
+
+        assertThat(ids(perform(get("/movies").param("city", city)))).contains(here).doesNotContain(elsewhere);
+        assertThat(ids(perform(get("/movies")))).contains(here, elsewhere);
+    }
+
+    @Test
+    void cinemaScheduleGroupsByMovieAndSuggestsTheNextDay() throws Exception {
+        long first = movie("A Phim Một " + tag, LocalDate.of(2026, 1, 1));
+        long second = movie("B Phim Hai " + tag, LocalDate.of(2026, 1, 1));
+        LocalDate tomorrow = VietnamTime.today(java.time.Clock.systemUTC()).plusDays(1);
+        OffsetDateTime at10 = tomorrow.atTime(10, 0).atZone(VietnamTime.ZONE).toOffsetDateTime();
+        showtime(first, at10);
+        showtime(first, at10.plusHours(3));
+        showtime(second, at10.plusHours(6));
+
+        JsonNode day = body(perform(get("/cinemas/{id}/showtimes", cinemaId).param("date", tomorrow.toString())));
+        assertThat(day.get("cinema").get("name").asText()).isEqualTo("Rạp " + tag);
+        assertThat(day.get("movies")).hasSize(2);
+        JsonNode m1 = day.get("movies").get(0);
+        assertThat(m1.get("movieId").asLong()).isEqualTo(first);
+        assertThat(m1.get("showtimes")).hasSize(2);
+        assertThat(m1.get("showtimes").get(0).get("availableSeats").asInt()).isEqualTo(0);
+        assertThat(day.get("nextAvailableDate").isNull()).isTrue();
+
+        JsonNode empty = body(perform(get("/cinemas/{id}/showtimes", cinemaId)
+                .param("date", tomorrow.minusDays(1).toString())));
+        assertThat(empty.get("movies")).isEmpty();
+        assertThat(empty.get("nextAvailableDate").asText()).isEqualTo(tomorrow.toString());
+
+        jdbc.update("UPDATE cinemas SET is_active = false WHERE id = ?", cinemaId);
+        mvc.perform(auth(get("/cinemas/{id}/showtimes", cinemaId))).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    void demoImagesAreServedWithoutALoginAndSeededMoviesUseThem() throws Exception {
+        mvc.perform(get("/media/posters/avengers-of-the-abyss.jpg"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "image/jpeg"));
+
+        JsonNode avengers = body(perform(get("/movies").param("q", "Avengers of the Abyss"))).get(0);
+        assertThat(avengers.get("posterUrl").asText()).isEqualTo("/media/posters/avengers-of-the-abyss.jpg");
+        assertThat(avengers.get("bannerUrl").asText()).isEqualTo("/media/banners/avengers-of-the-abyss.jpg");
+        JsonNode detail = body(perform(get("/movies/{id}", avengers.get("id").asLong())));
+        assertThat(detail.get("trailerUrl").asText()).startsWith("https://www.youtube.com/watch?v=");
     }
 
     private long movie(String title, LocalDate release) {
