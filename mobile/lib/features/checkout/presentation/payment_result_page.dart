@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -8,6 +10,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_buttons.dart';
+import '../../tickets/presentation/cubit/tickets_cubit.dart';
 import 'cubit/hold_cubit.dart';
 
 /// S11. Success: icon, booking code, "Xem vé". Failure: the reason and "Thử lại", which
@@ -33,6 +36,12 @@ class PaymentResultPage extends StatelessWidget {
 
 class PaymentSuccessView extends StatelessWidget {
   const PaymentSuccessView({super.key});
+
+  /// The new ticket, with "Vé của tôi" (refreshed) behind it.
+  void _openTicket(BuildContext context) {
+    unawaited(sl<TicketsCubit>().refreshAll());
+    context.go(Routes.ticket(context.read<HoldCubit>().bookingId));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +80,7 @@ class PaymentSuccessView extends StatelessWidget {
                 height: AppSpacing.buttonHeight,
                 child: PrimaryButton(
                   label: 'Xem vé',
-                  onPressed: () => context.go(Routes.tickets),
+                  onPressed: () => _openTicket(context),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),

@@ -28,6 +28,10 @@ import '../features/showtimes/data/showtimes_api.dart';
 import '../features/showtimes/domain/cinema_repository.dart';
 import '../features/showtimes/domain/showtime_repository.dart';
 import '../features/showtimes/presentation/cubit/city_cubit.dart';
+import '../features/tickets/data/ticket_repository_impl.dart';
+import '../features/tickets/data/tickets_api.dart';
+import '../features/tickets/domain/ticket_repository.dart';
+import '../features/tickets/presentation/cubit/tickets_cubit.dart';
 import 'router.dart';
 
 final GetIt sl = GetIt.instance;
@@ -72,14 +76,6 @@ Future<void> configureDependencies() async {
     // App-wide: the city picked on Home also drives S07 and the "Rạp" tab.
     ..registerLazySingleton<CityCubit>(() => CityCubit(sl(), sl()));
 
-  // Recent searches belong to the person signed in: forget them on sign-out.
-  final session = sl<AuthSession>();
-  session.addListener(() {
-    if (session.status == AuthStatus.unauthenticated) {
-      sl<RecentSearches>().clear();
-    }
-  });
-
   // Seat map
   sl
     ..registerLazySingleton<SeatMapApi>(() => SeatMapApi(sl<ApiClient>().dio))
@@ -94,5 +90,18 @@ Future<void> configureDependencies() async {
       () => BookingRepositoryImpl(sl(), sl()),
     );
 
-  // Other features register their data sources / repositories here: tickets.
+  // Tickets (F7). App-wide so a new payment can refresh the list.
+  sl
+    ..registerLazySingleton<TicketsApi>(() => TicketsApi(sl<ApiClient>().dio))
+    ..registerLazySingleton<TicketRepository>(() => TicketRepositoryImpl(sl()))
+    ..registerLazySingleton<TicketsCubit>(() => TicketsCubit(sl()));
+
+  // Recent searches and tickets belong to the person signed in: forget them on sign-out.
+  final session = sl<AuthSession>();
+  session.addListener(() {
+    if (session.status == AuthStatus.unauthenticated) {
+      sl<RecentSearches>().clear();
+      sl<TicketsCubit>().clear();
+    }
+  });
 }
