@@ -145,6 +145,31 @@ class TicketIT {
         mvc.perform(get("/me/tickets")).andExpect(status().isUnauthorized());
     }
 
+    /** S14 history lives next to the tickets because it reads the same paid bookings plus the rest. */
+    @Test
+    void historyListsEveryStatusNewestFirstForItsOwnerOnly() throws Exception {
+        long paidId = paid(alice, now.plusHours(3), 0, 1);
+        long cancelled = hold(alice, now.plusHours(6), 0, 1);
+        holds.cancel(alice, cancelled);
+        long lapsed = hold(alice, now.plusHours(9), 2);
+        jdbc.update("UPDATE bookings SET expires_at = now() - interval '1 minute' WHERE id = ?", lapsed);
+        long holding = hold(alice, now.plusHours(12), 3);
+
+        JsonNode history = body(ok(get("/me/bookings"), alice));
+        assertThat(ids(history)).containsExactly(holding, lapsed, cancelled, paidId);
+        List<String> statuses = new ArrayList<>();
+        history.forEach(b -> statuses.add(b.get("status").asText()));
+        assertThat(statuses).containsExactly("HOLDING", "EXPIRED", "CANCELLED", "PAID");
+        assertThat(history.get(2).get("seats").toString()).isEqualTo("[\"A1\",\"A2\"]");
+        assertThat(history.get(2).get("paidAt").isNull()).isTrue();
+        assertThat(history.get(3).get("paidAt").isNull()).isFalse();
+        assertThat(history.get(3).get("show").get("movieTitle").asText()).isEqualTo("Vé " + tag);
+        assertThat(history.get(3).get("totalAmount").asInt()).isPositive();
+
+        assertThat(body(ok(get("/me/bookings"), bob))).isEmpty();
+        mvc.perform(get("/me/bookings")).andExpect(status().isUnauthorized());
+    }
+
     private long paid(long userId, OffsetDateTime start, int... seatIndexes) {
         long id = hold(userId, start, seatIndexes);
         pay(userId, id);
