@@ -60,7 +60,9 @@ public class ShowtimeQueryService {
 
         var spec = jdbc.sql("""
                 SELECT c.id AS cinema_id, c.name AS cinema_name, c.city, c.address,
-                       s.id, s.start_at, s.end_at, s.format, s.subtitle, a.name AS auditorium, s.base_price
+                       s.id, s.start_at, s.end_at, s.format, s.subtitle, a.name AS auditorium, s.base_price,
+                       """ + SeatAvailability.FREE_COUNT + """
+                        AS available_seats
                 """ + FROM + cityClause + """
                    AND s.start_at >= :dayStart AND s.start_at < :dayEnd
                  ORDER BY c.name, c.id, s.start_at, a.name
@@ -84,7 +86,7 @@ public class ShowtimeQueryService {
             cinema.slots.add(new ShowtimeSlot(rs.getLong("id"), start,
                     rs.getObject("end_at", OffsetDateTime.class).toInstant(), rs.getString("format"),
                     rs.getString("subtitle"), rs.getString("auditorium"), rs.getInt("base_price"),
-                    start.isAfter(salesCloseAfter)));
+                    start.isAfter(salesCloseAfter), rs.getInt("available_seats")));
         });
 
         List<CinemaShowtimes> cinemas = byCinema.values().stream().map(CinemaBuilder::build).toList();
