@@ -13,6 +13,7 @@ class ShowtimeSlot extends Equatable {
     required this.auditorium,
     required this.basePrice,
     required this.bookable,
+    this.availableSeats,
   });
 
   factory ShowtimeSlot.fromJson(Map<String, dynamic> json) => ShowtimeSlot(
@@ -24,6 +25,7 @@ class ShowtimeSlot extends Equatable {
     auditorium: json['auditorium'] as String,
     basePrice: (json['basePrice'] as num).toInt(),
     bookable: json['bookable'] as bool,
+    availableSeats: (json['availableSeats'] as num?)?.toInt(),
   );
 
   final int id;
@@ -41,6 +43,9 @@ class ShowtimeSlot extends Equatable {
   /// False once sales close (15 minutes before the start).
   final bool bookable;
 
+  /// Seats neither sold nor held; null from an older backend.
+  final int? availableSeats;
+
   /// Group heading on S07: "2D Phụ đề", "3D Lồng tiếng".
   String get versionLabel =>
       '$format ${subtitle == 'DUB' ? 'Lồng tiếng' : 'Phụ đề'}';
@@ -55,6 +60,7 @@ class ShowtimeSlot extends Equatable {
     auditorium,
     basePrice,
     bookable,
+    availableSeats,
   ];
 }
 

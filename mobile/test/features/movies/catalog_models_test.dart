@@ -44,6 +44,7 @@ void main() {
               'auditorium': 'Phòng 2',
               'basePrice': 120000,
               'bookable': true,
+              'availableSeats': 116,
             },
             {
               'id': 12,
@@ -62,6 +63,8 @@ void main() {
     final c = data.cinemas.single;
     expect(c.showtimes.first.startAt, DateTime.utc(2026, 11, 22, 2));
     expect(c.showtimes.first.bookable, isFalse);
+    expect(c.showtimes.first.availableSeats, isNull); // older backend
+    expect(c.showtimes[1].availableSeats, 116);
     expect(c.byVersion.keys, ['2D Phụ đề', '3D Lồng tiếng']);
     expect(c.byVersion['2D Phụ đề']!.map((s) => s.id), [10, 12]);
     expect(data.nextAvailableDate, isNull);

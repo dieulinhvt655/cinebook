@@ -13,6 +13,9 @@ import '../features/movies/data/movie_repository_impl.dart';
 import '../features/movies/data/movies_api.dart';
 import '../features/movies/domain/movie_repository.dart';
 import '../features/movies/presentation/recent_searches.dart';
+import '../features/seat_map/data/seat_map_api.dart';
+import '../features/seat_map/data/seat_map_repository_impl.dart';
+import '../features/seat_map/domain/seat_map_repository.dart';
 import '../features/showtimes/data/showtime_repository_impl.dart';
 import '../features/showtimes/data/showtimes_api.dart';
 import '../features/showtimes/domain/showtime_repository.dart';
@@ -53,6 +56,13 @@ Future<void> configureDependencies() async {
       () => ShowtimeRepositoryImpl(sl()),
     );
 
+  // Seat map
+  sl
+    ..registerLazySingleton<SeatMapApi>(() => SeatMapApi(sl<ApiClient>().dio))
+    ..registerLazySingleton<SeatMapRepository>(
+      () => SeatMapRepositoryImpl(sl(), sl()),
+    );
+
   // Other features register their data sources / repositories here:
-  // seat_map, checkout, tickets.
+  // checkout, tickets.
 }

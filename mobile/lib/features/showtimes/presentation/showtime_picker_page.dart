@@ -245,8 +245,17 @@ class _TimeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final time = formatTime(slot.startAt);
+    final free = slot.availableSeats;
+    final soldOut = free == 0;
+    final detail = free == null
+        ? slot.auditorium
+        : soldOut
+        ? 'Hết vé'
+        : '$free ghế trống';
     return Semantics(
-      label: slot.bookable ? 'Suất $time' : 'Suất $time, đã đóng bán',
+      label: !slot.bookable
+          ? 'Suất $time, đã đóng bán'
+          : 'Suất $time, ${soldOut ? 'hết vé' : detail}',
       excludeSemantics: true,
       child: Opacity(
         opacity: slot.bookable ? 1 : 0.4,
@@ -259,7 +268,7 @@ class _TimeChip extends StatelessWidget {
             children: [
               Text(time),
               Text(
-                slot.auditorium,
+                detail,
                 style: const TextStyle(
                   fontSize: 11,
                   color: AppColors.textSecondary,
