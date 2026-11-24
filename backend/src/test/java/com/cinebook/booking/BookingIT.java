@@ -135,7 +135,8 @@ class BookingIT {
 
         JsonNode map = json.readTree(mvc.perform(get("/showtimes/{id}/seats", showtime)
                 .header("Authorization", bearer(bob))).andReturn().getResponse().getContentAsString());
-        assertThat(map.get("availableCount").asInt()).isEqualTo(2);
+        // 8 seats in the room, 5 held: A3, A4 and A6 are left.
+        assertThat(map.get("availableCount").asInt()).isEqualTo(3);
     }
 
     @Test
