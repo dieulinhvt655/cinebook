@@ -14,4 +14,7 @@ class TicketsApi {
 
   Future<Map<String, dynamic>> detail(int id) async =>
       (await _dio.get<Map<String, dynamic>>('/tickets/$id')).data!;
+
+  Future<List<dynamic>> history() async =>
+      (await _dio.get<List<dynamic>>('/me/bookings')).data!;
 }

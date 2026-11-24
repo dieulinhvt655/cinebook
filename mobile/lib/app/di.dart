@@ -31,6 +31,7 @@ import '../features/showtimes/presentation/cubit/city_cubit.dart';
 import '../features/tickets/data/ticket_repository_impl.dart';
 import '../features/tickets/data/tickets_api.dart';
 import '../features/tickets/domain/ticket_repository.dart';
+import '../features/tickets/presentation/cubit/booking_history_cubit.dart';
 import '../features/tickets/presentation/cubit/tickets_cubit.dart';
 import 'router.dart';
 
@@ -90,18 +91,22 @@ Future<void> configureDependencies() async {
       () => BookingRepositoryImpl(sl(), sl()),
     );
 
-  // Tickets (F7). App-wide so a new payment can refresh the list.
+  // Tickets (F7) and S14 history. App-wide so a new payment can refresh them.
   sl
     ..registerLazySingleton<TicketsApi>(() => TicketsApi(sl<ApiClient>().dio))
     ..registerLazySingleton<TicketRepository>(() => TicketRepositoryImpl(sl()))
-    ..registerLazySingleton<TicketsCubit>(() => TicketsCubit(sl()));
+    ..registerLazySingleton<TicketsCubit>(() => TicketsCubit(sl()))
+    ..registerLazySingleton<BookingHistoryCubit>(
+      () => BookingHistoryCubit(sl()),
+    );
 
-  // Recent searches and tickets belong to the person signed in: forget them on sign-out.
+  // Recent searches, tickets and history belong to the person signed in: forget them on sign-out.
   final session = sl<AuthSession>();
   session.addListener(() {
     if (session.status == AuthStatus.unauthenticated) {
       sl<RecentSearches>().clear();
       sl<TicketsCubit>().clear();
+      sl<BookingHistoryCubit>().clear();
     }
   });
 }
