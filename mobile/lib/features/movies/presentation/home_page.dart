@@ -10,19 +10,31 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../../core/widgets/state_views.dart';
+import '../../showtimes/presentation/cubit/city_cubit.dart';
+import '../../showtimes/presentation/widgets/city_button.dart';
 import '../domain/movie.dart';
 import 'cubit/home_cubit.dart';
 import 'widgets/banner_carousel.dart';
 import 'widgets/poster_card.dart';
 
-/// S04: search box, banner carousel, Đang chiếu / Sắp chiếu tabs, 2-column poster grid.
+/// S04: city picker, search box, banner carousel, Đang chiếu / Sắp chiếu tabs, 2-column poster grid.
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) => BlocProvider(
-    create: (_) => HomeCubit(sl())..load(),
-    child: const HomeView(),
+    create: (context) {
+      // Home is the first screen after login: fetch the city list for the picker.
+      final city = context.read<CityCubit>();
+      if (city.state.cities.isEmpty) unawaited(city.load());
+      return HomeCubit(sl(), city: city.state.selected)..load();
+    },
+    child: BlocListener<CityCubit, CityState>(
+      listenWhen: (a, b) => a.selected != b.selected,
+      listener: (context, city) =>
+          unawaited(context.read<HomeCubit>().changeCity(city.selected)),
+      child: const HomeView(),
+    ),
   );
 }
 
@@ -42,6 +54,7 @@ class HomeView extends StatelessWidget {
             context,
           ).textTheme.titleLarge?.copyWith(color: AppColors.primary),
         ),
+        actions: const [CityButton()],
       ),
       body: BlocConsumer<HomeCubit, HomeState>(
         listenWhen: (a, b) => b.failure != null && a.failure != b.failure,

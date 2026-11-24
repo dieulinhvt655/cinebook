@@ -42,8 +42,9 @@ class ShowtimeState extends Equatable {
 
 /// S07: showtimes by day; the city filter is applied on the device.
 class ShowtimeCubit extends Cubit<ShowtimeState> {
-  ShowtimeCubit(this._repo, this.movieId, {DateTime? today})
-    : super(_initial(today ?? vietnamToday()));
+  /// [city] starts the filter on the city picked on Home.
+  ShowtimeCubit(this._repo, this.movieId, {DateTime? today, String? city})
+    : super(_initial(today ?? vietnamToday(), city));
 
   static const dayCount = 7;
 
@@ -51,9 +52,10 @@ class ShowtimeCubit extends Cubit<ShowtimeState> {
   final int movieId;
   int _request = 0;
 
-  static ShowtimeState _initial(DateTime today) => ShowtimeState(
+  static ShowtimeState _initial(DateTime today, String? city) => ShowtimeState(
     days: [for (var i = 0; i < dayCount; i++) today.add(Duration(days: i))],
     date: today,
+    city: city,
   );
 
   Future<void> load() => selectDate(state.date);

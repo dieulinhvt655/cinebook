@@ -2,8 +2,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../../app/theme/app_colors.dart';
+import '../../../../core/network/media_url.dart';
 
-/// Poster or banner from the API. Movies without artwork (or a broken link) get a plain
+/// Poster or banner from the API (relative URLs are resolved against the API base). Movies without artwork (or a broken link) get a plain
 /// tile with a film icon, so the layout never collapses.
 class MovieImage extends StatelessWidget {
   const MovieImage({super.key, required this.url, this.fit = BoxFit.cover});
@@ -13,8 +14,8 @@ class MovieImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final u = url;
-    if (u == null || u.isEmpty) return const _NoImage();
+    final u = resolveMediaUrl(url);
+    if (u == null) return const _NoImage();
     return CachedNetworkImage(
       imageUrl: u,
       fit: fit,

@@ -9,13 +9,20 @@ class MovieRepositoryImpl implements MovieRepository {
   final MoviesApi _api;
 
   @override
-  Future<List<MovieSummary>> movies({MovieStatus? status, String? query}) =>
-      guardApi(() async {
-        final json = await _api.list(status: status?.apiValue, query: query);
-        return json
-            .map((e) => MovieSummary.fromJson(e as Map<String, dynamic>))
-            .toList();
-      });
+  Future<List<MovieSummary>> movies({
+    MovieStatus? status,
+    String? query,
+    String? city,
+  }) => guardApi(() async {
+    final json = await _api.list(
+      status: status?.apiValue,
+      query: query,
+      city: city,
+    );
+    return json
+        .map((e) => MovieSummary.fromJson(e as Map<String, dynamic>))
+        .toList();
+  });
 
   @override
   Future<MovieDetail> detail(int id) =>

@@ -53,18 +53,27 @@ class HomeState extends Equatable {
 
 /// S04: both tabs are loaded together so switching tabs is instant.
 class HomeCubit extends Cubit<HomeState> {
-  HomeCubit(this._repo) : super(const HomeState());
+  HomeCubit(this._repo, {String? city})
+    : _city = city,
+      super(const HomeState());
 
   final MovieRepository _repo;
 
+  /// "Now showing" is narrowed to this city; null means every city.
+  String? _city;
+
+  int _request = 0;
+
+  /// Loads both tabs. A newer load (pull to refresh, city change) wins over an older one.
   Future<void> load() async {
-    if (state.loading) return;
+    final id = ++_request;
     emit(state.copyWith(loading: true, clearFailure: true));
     try {
       final results = await Future.wait([
-        _repo.movies(status: MovieStatus.nowShowing),
+        _repo.movies(status: MovieStatus.nowShowing, city: _city),
         _repo.movies(status: MovieStatus.comingSoon),
       ]);
+      if (id != _request || isClosed) return;
       emit(
         state.copyWith(
           nowShowing: results[0],
@@ -73,9 +82,17 @@ class HomeCubit extends Cubit<HomeState> {
         ),
       );
     } on ApiFailure catch (f) {
+      if (id != _request || isClosed) return;
       emit(state.copyWith(loading: false, failure: f));
     }
   }
 
   void selectTab(MovieStatus tab) => emit(state.copyWith(tab: tab));
+
+  /// The app-bar city changed: reload "now showing".
+  Future<void> changeCity(String? city) {
+    if (city == _city) return Future.value();
+    _city = city;
+    return load();
+  }
 }

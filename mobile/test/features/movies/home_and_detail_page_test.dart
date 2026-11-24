@@ -4,6 +4,12 @@ import 'package:cinebook/features/movies/domain/movie.dart';
 import 'package:cinebook/features/movies/domain/movie_repository.dart';
 import 'package:cinebook/features/movies/presentation/home_page.dart';
 import 'package:cinebook/features/movies/presentation/movie_detail_page.dart';
+import 'package:cinebook/core/storage/app_preferences.dart';
+import 'package:cinebook/features/showtimes/domain/cinema.dart';
+import 'package:cinebook/features/showtimes/domain/cinema_repository.dart';
+import 'package:cinebook/features/showtimes/presentation/cubit/city_cubit.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:mocktail/mocktail.dart';
@@ -12,13 +18,34 @@ import 'catalog_fixtures.dart';
 
 class _Repo extends Mock implements MovieRepository {}
 
+class _Cinemas extends Mock implements CinemaRepository {}
+
 void main() {
   late _Repo repo;
+  late _Cinemas cinemas;
+  late CityCubit city;
 
-  setUp(() {
+  setUp(() async {
     repo = _Repo();
+    cinemas = _Cinemas();
     sl.registerSingleton<MovieRepository>(repo);
+    SharedPreferences.setMockInitialValues({});
+    city = CityCubit(
+      cinemas,
+      AppPreferences(await SharedPreferences.getInstance()),
+    );
+    when(() => cinemas.cities()).thenAnswer(
+      (_) async => const [
+        City(name: 'Hà Nội', cinemaCount: 2),
+        City(name: 'TP. Hồ Chí Minh', cinemaCount: 1),
+      ],
+    );
   });
+
+  Widget app(Widget home) => BlocProvider.value(
+    value: city,
+    child: MaterialApp(home: home),
+  );
 
   tearDown(sl.reset);
 
@@ -48,7 +75,7 @@ void main() {
       ],
     );
     phone(t);
-    await t.pumpWidget(const MaterialApp(home: HomePage()));
+    await t.pumpWidget(app(const HomePage()));
     await t.pump();
     await t.pump();
 
@@ -66,7 +93,7 @@ void main() {
     when(() => repo.movies(status: any(named: 'status'))).thenThrow(
       const ApiFailure(code: ApiFailure.offline, message: 'Không có mạng'),
     );
-    await t.pumpWidget(const MaterialApp(home: HomePage()));
+    await t.pumpWidget(app(const HomePage()));
     await t.pump();
 
     expect(find.text('Không có mạng'), findsOneWidget);
@@ -84,7 +111,7 @@ void main() {
       }),
     );
     phone(t);
-    await t.pumpWidget(const MaterialApp(home: MovieDetailPage(movieId: 7)));
+    await t.pumpWidget(app(const MovieDetailPage(movieId: 7)));
     await t.pump();
 
     expect(find.text('Avengers of the Abyss'), findsWidgets);
@@ -94,5 +121,33 @@ void main() {
     expect(find.byTooltip('Xem trailer'), findsOneWidget);
     expect(find.text('Đặt vé'), findsOneWidget);
     expect(find.text('Xem thêm'), findsOneWidget);
+  });
+
+  testWidgets('picking a city reloads now showing for that city', (t) async {
+    when(
+      () => repo.movies(
+        status: MovieStatus.nowShowing,
+        city: any(named: 'city'),
+      ),
+    ).thenAnswer((_) async => [movie(1)]);
+    when(
+      () => repo.movies(status: MovieStatus.comingSoon),
+    ).thenAnswer((_) async => []);
+    phone(t);
+    await t.pumpWidget(app(const HomePage()));
+    await t.pump();
+    await t.pump();
+
+    expect(find.text('Toàn quốc'), findsOneWidget);
+    await t.tap(find.text('Toàn quốc'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Hà Nội'));
+    await t.pumpAndSettle();
+
+    expect(city.state.selected, 'Hà Nội');
+    verify(
+      () => repo.movies(status: MovieStatus.nowShowing, city: 'Hà Nội'),
+    ).called(1);
+    await t.pumpWidget(const SizedBox());
   });
 }
