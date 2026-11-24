@@ -1,0 +1,54 @@
+name: release
+
+# Tag v* (e.g. git tag v1.0.0 && git push origin v1.0.0) builds the release APK against the
+# deployed API and attaches it to a GitHub Release. The API address comes from the repository
+# variable API_BASE_URL (Settings > Secrets and variables > Actions > Variables).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+    steps:
+      - name: Require the deployed API address
+        run: |
+          case "$API_BASE_URL" in
+            https://*/api/v1) ;;
+            *) echo "Set the repository variable API_BASE_URL to https://<host>/api/v1"; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: ./tool/fetch_fonts.sh
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - run: flutter test
+      - run: flutter build apk --release --dart-define=API_BASE_URL=$API_BASE_URL
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk "cinebook-${GITHUB_REF_NAME}.apk"
+          gh release create "$GITHUB_REF_NAME" "cinebook-${GITHUB_REF_NAME}.apk" \
+            --title "CineBook $GITHUB_REF_NAME" \
+            --notes "APK Android (bản demo, ký bằng debug key). API: $API_BASE_URL. Tài khoản demo: demo@cinebook.dev / Demo@1234."
