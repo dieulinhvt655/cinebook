@@ -11,6 +11,9 @@ import '../core/storage/token_storage.dart';
 import '../features/auth/data/auth_api.dart';
 import '../features/auth/data/auth_repository_impl.dart';
 import '../features/auth/domain/auth_repository.dart';
+import '../features/checkout/data/booking_repository_impl.dart';
+import '../features/checkout/data/bookings_api.dart';
+import '../features/checkout/domain/booking_repository.dart';
 import '../features/movies/data/movie_repository_impl.dart';
 import '../features/movies/data/movies_api.dart';
 import '../features/movies/domain/movie_repository.dart';
@@ -84,6 +87,12 @@ Future<void> configureDependencies() async {
       () => SeatMapRepositoryImpl(sl(), sl()),
     );
 
-  // Other features register their data sources / repositories here:
-  // checkout, tickets.
+  // Bookings (seat hold, checkout)
+  sl
+    ..registerLazySingleton<BookingsApi>(() => BookingsApi(sl<ApiClient>().dio))
+    ..registerLazySingleton<BookingRepository>(
+      () => BookingRepositoryImpl(sl(), sl()),
+    );
+
+  // Other features register their data sources / repositories here: tickets.
 }

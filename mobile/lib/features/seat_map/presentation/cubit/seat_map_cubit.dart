@@ -2,6 +2,8 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/network/api_failure.dart';
+import '../../../checkout/domain/booking.dart';
+import '../../../checkout/domain/booking_repository.dart';
 import '../../domain/seat_map.dart';
 import '../../domain/seat_map_repository.dart';
 import '../../domain/seat_selection.dart';
@@ -22,6 +24,7 @@ class SeatMapState extends Equatable {
     this.map,
     this.failure,
     this.loading = false,
+    this.holding = false,
     this.selected = const {},
     this.notice,
   });
@@ -32,6 +35,9 @@ class SeatMapState extends Equatable {
   /// Error of the first load (full-screen); later failures become a [notice].
   final ApiFailure? failure;
   final bool loading;
+
+  /// "Tiếp tục" was pressed and the hold request is on its way.
+  final bool holding;
 
   /// Ids of the seats picked on this device.
   final Set<int> selected;
@@ -44,32 +50,38 @@ class SeatMapState extends Equatable {
   int get total => selectedSeats.fold(0, (sum, s) => sum + s.price);
 
   bool get canContinue =>
-      selected.isNotEmpty && (map?.bookable ?? false) && !loading;
+      selected.isNotEmpty && (map?.bookable ?? false) && !loading && !holding;
 
   SeatMapState copyWith({
     SeatMap? map,
     ApiFailure? failure,
     bool clearFailure = false,
     bool? loading,
+    bool? holding,
     Set<int>? selected,
     SeatNotice? notice,
   }) => SeatMapState(
     map: map ?? this.map,
     failure: clearFailure ? null : failure ?? this.failure,
     loading: loading ?? this.loading,
+    holding: holding ?? this.holding,
     selected: selected ?? this.selected,
     notice: notice ?? this.notice,
   );
 
   @override
-  List<Object?> get props => [map, failure, loading, selected, notice];
+  List<Object?> get props => [map, failure, loading, holding, selected, notice];
 }
 
-/// S08 (F4): loads the room, applies the selection rules and keeps a running total.
+/// S08 (F4/F5): loads the room, applies the selection rules, keeps a running total and
+/// holds the picked seats. The rules here only give quick feedback; the backend checks
+/// them again and decides.
 class SeatMapCubit extends Cubit<SeatMapState> {
-  SeatMapCubit(this._repo, this.showtimeId) : super(const SeatMapState());
+  SeatMapCubit(this._repo, this._bookings, this.showtimeId)
+    : super(const SeatMapState());
 
   final SeatMapRepository _repo;
+  final BookingRepository _bookings;
   final int showtimeId;
   int _notices = 0;
 
@@ -143,6 +155,30 @@ class SeatMapCubit extends Cubit<SeatMapState> {
     }
     return state.selectedSeats;
   }
+
+  /// "Tiếp tục": holds the picked seats for 10 minutes. Returns the booking, or null with
+  /// a message. A seat someone else just took reloads the map, which drops it from the
+  /// selection and names it.
+  Future<Booking?> hold() async {
+    final seats = confirm();
+    if (seats == null) return null;
+    emit(state.copyWith(holding: true));
+    try {
+      final booking = await _bookings.hold(showtimeId, [
+        for (final s in seats) s.id,
+      ]);
+      if (!isClosed) emit(state.copyWith(holding: false));
+      return booking;
+    } on ApiFailure catch (f) {
+      if (isClosed) return null;
+      emit(state.copyWith(holding: false, notice: _notice(f.message)));
+      if (_staleMap.contains(f.code)) await load();
+      return null;
+    }
+  }
+
+  /// Answers that mean the seat map on screen is out of date.
+  static const _staleMap = {'SEAT_TAKEN', 'SHOWTIME_CLOSED', 'ORPHAN_SEAT'};
 
   SeatNotice _notice(String message) => SeatNotice(++_notices, message);
 }
