@@ -13,6 +13,7 @@ import com.cinebook.common.ApiException;
 import com.cinebook.security.JwtService;
 import com.cinebook.security.Role;
 import com.cinebook.support.IntegrationTest;
+import com.cinebook.ticket.QrSigner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
@@ -73,7 +74,7 @@ class BookingIT {
     HoldExpiryService expiry;
 
     @Autowired
-    TicketCodes ticketCodes;
+    QrSigner qr;
 
     String tag;
     long alice;
@@ -340,10 +341,9 @@ class BookingIT {
         assertThat(ticketCount(id)).isEqualTo(2);
         jdbc.queryForList("SELECT ticket_code, qr_payload FROM tickets WHERE booking_id = ?", id).forEach(t -> {
             assertThat((String) t.get("ticket_code")).matches("TK[A-Z2-9]{10}");
-            String qr = (String) t.get("qr_payload");
-            assertThat(qr).startsWith("CINEBOOK:" + t.get("ticket_code") + ".").doesNotContain(Long.toString(id));
-            assertThat(ticketCodes.verify(qr)).isTrue();
-            assertThat(ticketCodes.verify(qr.substring(0, qr.length() - 1) + "x")).isFalse();
+            String payload = (String) t.get("qr_payload");
+            assertThat(qr.verify(payload)).contains((String) t.get("ticket_code"));
+            assertThat(qr.verify(payload.substring(0, payload.length() - 2) + "xx")).isEmpty();
         });
 
         JsonNode map = body(mvc.perform(get("/showtimes/{id}/seats", showtime).header("Authorization", bearer(bob))));
