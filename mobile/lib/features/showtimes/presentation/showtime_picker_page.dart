@@ -1,18 +1,17 @@
-import 'dart:async';
-
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../app/di.dart';
-import '../../../app/router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../../core/widgets/state_views.dart';
 import '../domain/movie_showtimes.dart';
+import 'cubit/city_cubit.dart';
 import 'cubit/showtime_cubit.dart';
+import 'widgets/day_strip.dart';
+import 'widgets/time_chip.dart';
 
 /// S07: 7-day strip, city filter, one expandable card per cinema with time chips grouped
 /// by version ("2D Phụ đề"). Showtimes whose sales have closed are dimmed and disabled.
@@ -23,7 +22,11 @@ class ShowtimePickerPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => BlocProvider(
-    create: (_) => ShowtimeCubit(sl(), movieId)..load(),
+    create: (context) => ShowtimeCubit(
+      sl(),
+      movieId,
+      city: context.read<CityCubit>().state.selected,
+    )..load(),
     child: const ShowtimePickerView(),
   );
 }
@@ -40,7 +43,7 @@ class ShowtimePickerView extends StatelessWidget {
           final cubit = context.read<ShowtimeCubit>();
           return Column(
             children: [
-              _DayStrip(
+              DayStrip(
                 days: state.days,
                 selected: state.date,
                 onSelect: cubit.selectDate,
@@ -53,63 +56,6 @@ class ShowtimePickerView extends StatelessWidget {
                 ),
               Expanded(child: _List(state: state)),
             ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _DayStrip extends StatelessWidget {
-  const _DayStrip({
-    required this.days,
-    required this.selected,
-    required this.onSelect,
-  });
-
-  final List<DateTime> days;
-  final DateTime selected;
-  final ValueChanged<DateTime> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 72,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.pagePadding,
-          vertical: AppSpacing.xs,
-        ),
-        itemCount: days.length,
-        separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.xs),
-        itemBuilder: (_, i) {
-          final d = days[i];
-          final isSelected = d == selected;
-          final parts = formatDayChip(d).split(', ');
-          return Material(
-            color: isSelected ? AppColors.primary : AppColors.surfaceVariant,
-            borderRadius: BorderRadius.circular(AppSpacing.radius),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(AppSpacing.radius),
-              onTap: isSelected ? null : () => onSelect(d),
-              child: SizedBox(
-                width: 56,
-                // Scales down rather than overflowing with large system text.
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Column(
-                    children: [
-                      Text(parts[0], style: const TextStyle(fontSize: 12)),
-                      Text(
-                        parts[1],
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
           );
         },
       ),
@@ -227,56 +173,11 @@ class _CinemaCard extends StatelessWidget {
             Wrap(
               spacing: AppSpacing.xs,
               runSpacing: AppSpacing.xs,
-              children: [for (final s in slots) _TimeChip(slot: s)],
+              children: [for (final s in slots) TimeChip(slot: s)],
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _TimeChip extends StatelessWidget {
-  const _TimeChip({required this.slot});
-
-  final ShowtimeSlot slot;
-
-  @override
-  Widget build(BuildContext context) {
-    final time = formatTime(slot.startAt);
-    final free = slot.availableSeats;
-    final soldOut = free == 0;
-    final detail = free == null
-        ? slot.auditorium
-        : soldOut
-        ? 'Hết vé'
-        : '$free ghế trống';
-    return Semantics(
-      label: !slot.bookable
-          ? 'Suất $time, đã đóng bán'
-          : 'Suất $time, ${soldOut ? 'hết vé' : detail}',
-      excludeSemantics: true,
-      child: Opacity(
-        opacity: slot.bookable ? 1 : 0.4,
-        child: OutlinedButton(
-          onPressed: slot.bookable
-              ? () => unawaited(context.push(Routes.seatMap(slot.id)))
-              : null,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(time),
-              Text(
-                detail,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -12,6 +12,7 @@ import '../features/movies/presentation/home_page.dart';
 import '../features/movies/presentation/movie_detail_page.dart';
 import '../features/movies/presentation/search_page.dart';
 import '../features/seat_map/presentation/seat_map_page.dart';
+import '../features/showtimes/presentation/cinema_schedule_page.dart';
 import '../features/showtimes/presentation/cinemas_page.dart';
 import '../features/showtimes/presentation/showtime_picker_page.dart';
 import '../features/tickets/presentation/ticket_detail_page.dart';
@@ -38,6 +39,8 @@ abstract final class Routes {
       '/bookings/$bookingId/checkout'; // S10
   static String result(int bookingId) => '/bookings/$bookingId/result'; // S11
   static String ticket(int id) => '/tickets/$id'; // S13
+  static String cinema(int id) =>
+      '/cinemas/$id'; // Rạp tab: one cinema's schedule
 
   static const public = {splash, login, register};
 }
@@ -119,6 +122,10 @@ GoRouter buildRouter(AuthSession session) => GoRouter(
           builder: (_, s) => ShowtimePickerPage(movieId: _id(s)),
         ),
       ],
+    ),
+    GoRoute(
+      path: '/cinemas/:id',
+      builder: (_, s) => CinemaSchedulePage(cinemaId: _id(s)),
     ),
     GoRoute(
       path: '/showtimes/:id/seats',
