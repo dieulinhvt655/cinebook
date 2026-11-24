@@ -253,6 +253,13 @@
           ]
         },
         {
+          "name": "Get booking",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/bookings/{{bookingId}}"
+          }
+        },
+        {
           "name": "Update combos",
           "request": {
             "method": "PUT",
