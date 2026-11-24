@@ -9,6 +9,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -58,6 +59,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail pd = Problems.of(ErrorCode.VALIDATION_FAILED, "Dữ liệu không hợp lệ");
         pd.setProperty("fields", Map.of(name, "Giá trị không hợp lệ"));
         return ResponseEntity.badRequest().body(pd);
+    }
+
+    /** Body that is not valid JSON or has a wrong value, e.g. {@code {"result":"MAYBE"}}. */
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        return ResponseEntity.badRequest().body(Problems.of(ErrorCode.VALIDATION_FAILED, "Dữ liệu không hợp lệ"));
     }
 
     @ExceptionHandler(Exception.class)
