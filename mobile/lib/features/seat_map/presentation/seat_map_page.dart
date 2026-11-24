@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -5,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../app/di.dart';
+import '../../../app/router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../core/utils/formatters.dart';
@@ -25,7 +27,7 @@ class SeatMapPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => BlocProvider(
-    create: (_) => SeatMapCubit(sl(), showtimeId)..load(),
+    create: (_) => SeatMapCubit(sl(), sl(), showtimeId)..load(),
     child: const SeatMapView(),
   );
 }
@@ -69,21 +71,23 @@ class SeatMapView extends StatelessWidget {
           },
           bottomNavigationBar: map == null || map.soldOut || !map.bookable
               ? null
-              : _SummaryBar(state: state, onContinue: () => _continue(context)),
+              : _SummaryBar(
+                  state: state,
+                  onContinue: () => unawaited(_continue(context)),
+                ),
         );
       },
     );
   }
 
-  void _continue(BuildContext context) {
-    final seats = context.read<SeatMapCubit>().confirm();
-    if (seats == null) return;
-    // F5 holds these seats (POST /bookings) and opens S09.
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(content: Text('Chức năng giữ ghế đang được hoàn thiện')),
-      );
+  /// Holds the seats and opens S09. Coming back (hold cancelled or expired) reloads the
+  /// map, so the seats just released show as free again.
+  Future<void> _continue(BuildContext context) async {
+    final cubit = context.read<SeatMapCubit>();
+    final booking = await cubit.hold();
+    if (booking == null || !context.mounted) return;
+    await context.push(Routes.combos(booking.id));
+    if (!cubit.isClosed) await cubit.load();
   }
 }
 
@@ -355,6 +359,7 @@ class _SummaryBar extends StatelessWidget {
                 height: AppSpacing.buttonHeight,
                 child: PrimaryButton(
                   label: 'Tiếp tục',
+                  loading: state.holding,
                   onPressed: state.canContinue ? onContinue : null,
                 ),
               ),

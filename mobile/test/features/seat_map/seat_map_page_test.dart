@@ -1,3 +1,4 @@
+import 'package:cinebook/features/checkout/domain/booking_repository.dart';
 import 'package:cinebook/features/seat_map/domain/seat_map_repository.dart';
 import 'package:cinebook/features/seat_map/presentation/cubit/seat_map_cubit.dart';
 import 'package:cinebook/features/seat_map/presentation/seat_map_page.dart';
@@ -12,6 +13,8 @@ import 'seat_map_fixtures.dart';
 
 class _Repo extends Mock implements SeatMapRepository {}
 
+class _Bookings extends Mock implements BookingRepository {}
+
 void main() {
   late _Repo repo;
 
@@ -22,7 +25,7 @@ void main() {
     await t.pumpWidget(
       MaterialApp(
         home: BlocProvider(
-          create: (_) => SeatMapCubit(repo, 42)..load(),
+          create: (_) => SeatMapCubit(repo, _Bookings(), 42)..load(),
           child: const SeatMapView(),
         ),
       ),

@@ -1,22 +1,33 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:cinebook/core/network/api_failure.dart';
+import 'package:cinebook/features/checkout/domain/booking.dart';
+import 'package:cinebook/features/checkout/domain/booking_repository.dart';
 import 'package:cinebook/features/seat_map/domain/seat_map.dart';
 import 'package:cinebook/features/seat_map/domain/seat_map_repository.dart';
 import 'package:cinebook/features/seat_map/presentation/cubit/seat_map_cubit.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import '../checkout/booking_fixtures.dart';
 import 'seat_map_fixtures.dart';
 
 class _Repo extends Mock implements SeatMapRepository {}
 
+class _Bookings extends Mock implements BookingRepository {}
+
 void main() {
   late _Repo repo;
+  late _Bookings bookings;
   const offline = ApiFailure(code: ApiFailure.offline, message: 'Mất mạng');
 
-  setUp(() => repo = _Repo());
+  setUpAll(() => registerFallbackValue(<int>[]));
 
-  SeatMapCubit build() => SeatMapCubit(repo, 42);
+  setUp(() {
+    repo = _Repo();
+    bookings = _Bookings();
+  });
+
+  SeatMapCubit build() => SeatMapCubit(repo, bookings, 42);
 
   blocTest<SeatMapCubit, SeatMapState>(
     'loads the map; picking seats keeps a running total',
@@ -201,5 +212,82 @@ void main() {
       ),
     );
     expect(c.state.selected, isEmpty);
+  });
+
+  group('hold ("Tiếp tục")', () {
+    final booking = Booking.fromJson(bookingJson());
+
+    blocTest<SeatMapCubit, SeatMapState>(
+      'sends the picked seat ids and returns the booking',
+      setUp: () {
+        when(() => repo.forShowtime(42)).thenAnswer((_) async => seatMap());
+        when(() => bookings.hold(42, any())).thenAnswer((_) async => booking);
+      },
+      build: build,
+      act: (c) async {
+        await c.load();
+        c.toggle(c.state.map!.seat('B1'));
+        c.toggle(c.state.map!.seat('B2'));
+        expect(await c.hold(), booking);
+      },
+      verify: (c) {
+        final ids = c.state.map!.idsOf(['B1', 'B2']).toList();
+        verify(() => bookings.hold(42, ids)).called(1);
+        expect(c.state.holding, isFalse);
+      },
+    );
+
+    blocTest<SeatMapCubit, SeatMapState>(
+      'a seat taken meanwhile reloads the map and drops it from the selection',
+      setUp: () {
+        var calls = 0;
+        when(() => repo.forShowtime(42)).thenAnswer(
+          (_) async =>
+              ++calls == 1 ? seatMap() : seatMap(status: {'B1': 'HELD'}),
+        );
+        when(() => bookings.hold(42, any())).thenThrow(
+          const ApiFailure(
+            code: 'SEAT_TAKEN',
+            message: 'Ghế vừa được người khác chọn, vui lòng chọn ghế khác',
+          ),
+        );
+      },
+      build: build,
+      act: (c) async {
+        await c.load();
+        c.toggle(c.state.map!.seat('B1'));
+        c.toggle(c.state.map!.seat('B2'));
+        expect(await c.hold(), isNull);
+      },
+      verify: (c) {
+        verify(() => repo.forShowtime(42)).called(2);
+        expect(c.state.selectedSeats.map((s) => s.label), ['B2']);
+        expect(c.state.notice!.message, 'Ghế B1 vừa được người khác chọn');
+      },
+    );
+
+    blocTest<SeatMapCubit, SeatMapState>(
+      'other refusals show the server message without reloading',
+      setUp: () {
+        when(() => repo.forShowtime(42)).thenAnswer((_) async => seatMap());
+        when(() => bookings.hold(42, any())).thenThrow(
+          const ApiFailure(
+            code: 'SEAT_LIMIT_EXCEEDED',
+            message: 'Tối đa 8 ghế mỗi lần đặt',
+          ),
+        );
+      },
+      build: build,
+      act: (c) async {
+        await c.load();
+        c.toggle(c.state.map!.seat('B1'));
+        expect(await c.hold(), isNull);
+      },
+      verify: (c) {
+        verify(() => repo.forShowtime(42)).called(1);
+        expect(c.state.notice!.message, 'Tối đa 8 ghế mỗi lần đặt');
+        expect(c.state.canContinue, isTrue);
+      },
+    );
   });
 }
