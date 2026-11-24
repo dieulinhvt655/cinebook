@@ -128,7 +128,8 @@ public class SeatHoldService {
         if ("PAID".equals(status)) {
             throw new ApiException(ErrorCode.BOOKING_NOT_HOLDING, "Đơn đã thanh toán, không thể huỷ");
         }
-        cancelHolds("id = :id", Map.of("id", bookingId));
+        // Owner filter again in the UPDATE itself, not only in the check above.
+        cancelHolds("id = :id AND user_id = :userId", Map.of("id", bookingId, "userId", userId));
     }
 
     private void releaseOverdueHolds(long showtimeId, OffsetDateTime now) {
