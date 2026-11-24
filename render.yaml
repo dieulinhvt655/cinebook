@@ -1,0 +1,29 @@
+# Render Blueprint for the public demo API (free plan). Secrets are entered in the Render
+# dashboard when the blueprint is created (sync: false), never committed. See docs/DEPLOY.md.
+services:
+  - type: web
+    name: cinebook-api
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/actuator/health
+    autoDeploy: false
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: demo
+      - key: DB_URL
+        sync: false
+      - key: DB_APP_USERNAME
+        value: cinebook_app
+      - key: DB_APP_PASSWORD
+        sync: false
+      - key: DB_MIGRATOR_USERNAME
+        value: cinebook_migrator
+      - key: DB_MIGRATOR_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: QR_HMAC_KEY
+        generateValue: true

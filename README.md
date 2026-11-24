@@ -4,7 +4,31 @@ App đặt vé xem phim end-to-end: **Flutter** (BLoC, Clean Architecture) + **S
 
 [![ci](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 
-> Thiết kế đầy đủ: [docs/CineBook – Tài liệu phân tích & thiết kế.pdf](docs/). APK, link API demo và GIF demo sẽ bổ sung khi deploy.
+> Thiết kế đầy đủ: [docs/CineBook – Tài liệu phân tích & thiết kế.pdf](docs/).
+
+## Demo
+
+| | |
+|---|---|
+| APK Android | [Bản mới nhất trên Releases](../../releases/latest) (sau khi gắn tag `v*`) |
+| API | _cập nhật sau khi deploy_: `https://<service>.onrender.com/api/v1`, Swagger ở `/swagger-ui.html` |
+| Tài khoản | `demo@cinebook.dev` / `Demo@1234` (thêm `demo2@cinebook.dev` để thử hai người cùng giữ một ghế) |
+
+Hướng dẫn deploy (Render + Neon) và phát hành APK: [docs/DEPLOY.md](docs/DEPLOY.md).
+
+## Tính năng (MVP)
+
+| # | Tính năng | Điểm chính |
+|---|---|---|
+| F1 | Đăng ký / đăng nhập | JWT + refresh token xoay vòng, khoá đăng nhập tăng dần khi sai nhiều lần, bắt buộc đăng nhập trước khi vào app |
+| F2 | Trang chủ, tìm kiếm | Banner, Đang chiếu / Sắp chiếu, tìm không dấu, chọn thành phố, tab Rạp |
+| F3 | Chi tiết phim, suất chiếu | Trailer, dải 7 ngày, nhóm theo rạp và định dạng, đóng bán 15 phút trước giờ chiếu |
+| F4 | Sơ đồ ghế | Ghế thường / VIP / đôi, không để trống ghế lẻ, tối đa 8 ghế, tổng tiền cập nhật ngay |
+| F5 | Giữ ghế 10 phút | Chống bán trùng bằng index DB (409 khi trùng), đếm ngược theo giờ server, huỷ giữ, tự nhả khi hết giờ |
+| F6 | Combo và thanh toán giả lập | Giá chốt theo đơn, Idempotency-Key (bấm 2 lần chỉ 1 giao dịch), 410 khi đã hết giờ giữ ghế |
+| F7 | Vé của tôi | Sắp tới / Đã xem, cuống vé với QR ký HMAC, không xem được vé của người khác |
+
+**Luồng demo:** đăng nhập → chọn phim → chọn suất → chọn ghế → "Tiếp tục" (giữ ghế 10 phút) → chọn combo → tick điều khoản → "Giả lập thành công" → "Xem vé".
 
 ## Kiến trúc
 
@@ -28,18 +52,19 @@ flowchart LR
 | DB | PostgreSQL 16 + Flyway (`unaccent`, `pg_trgm`, `btree_gist`); 2 role `cinebook_migrator` / `cinebook_app` |
 | File | Cloudinary (poster, banner, combo) |
 | Test / CI | JUnit 5 + Testcontainers, bloc_test, GitHub Actions (build APK release) |
-| Deploy | Docker → Render, Postgres trên Neon/Supabase |
+| Deploy | Docker → Render (`render.yaml`), Postgres trên Neon, APK qua GitHub Releases (`release.yml`) |
 
 ## Cấu trúc repo
 
 ```
 cinebook/
-├── .github/workflows/   # ci.yml (gọi backend.yml, mobile.yml), db-backup.yml
+├── .github/workflows/   # ci.yml (gọi backend.yml, mobile.yml), release.yml (APK), db-backup.yml
+├── render.yaml          # Render Blueprint cho API demo
 ├── docs/                # tài liệu thiết kế, screenshots/, postman/
 ├── mobile/              # Flutter: lib/{app,core,features/<feature>/{data,domain,presentation}}
 │                        # features: auth, movies, showtimes, seat_map, checkout, tickets
 └── backend/             # Spring Boot: com.cinebook.{auth,catalog,showtime,booking,payment,ticket,
-                         #   media,security,config,common}; db/migration V1..V6 + db/seed R__
+                         #   media,security,config,common}; db/migration V1..V8 + db/seed R__
 ```
 
 ## Chạy backend
@@ -53,7 +78,7 @@ docker compose up -d    # PostgreSQL 16 + 2 role + extension
 ./gradlew bootRun       # profile dev: chạy migration và nạp seed demo
 ```
 
-- API: `http://localhost:8080/api/v1`. Swagger UI (tạm làm trang admin cho MVP): `http://localhost:8080/api/v1/swagger-ui.html`
+- API: `http://localhost:8080/api/v1`. Ảnh demo (poster, banner) phục vụ tại `/api/v1/media/**`. Swagger UI (tạm làm trang admin cho MVP): `http://localhost:8080/api/v1/swagger-ui.html`
 - Postman: [`docs/postman/cinebook.postman_collection.json`](docs/postman/cinebook.postman_collection.json)
 - Tài khoản demo (mật khẩu `Demo@1234`): `demo@cinebook.dev`, `demo2@cinebook.dev` (khách), `admin@cinebook.dev`, `staff@cinebook.dev`
 - Test: `./gradlew test`. Integration test chạy PostgreSQL thật qua Testcontainers và tự bỏ qua khi máy không có Docker.
